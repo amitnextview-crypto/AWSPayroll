@@ -5,6 +5,7 @@
   "scripts": {
     "android": "react-native run-android",
     "start": "react-native start",
+    "android:clean-gradle": "cd android && gradlew.bat --stop && cd .. && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item -LiteralPath android/.gradle -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath .gradle-user -Recurse -Force -ErrorAction SilentlyContinue\"",
     "lint": "eslint .",
     "test": "jest",
     "build:android:debug": "cd android && gradle assembleDebug",

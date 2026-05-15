@@ -154,7 +154,7 @@ export const AppNavigator = () => {
 
   if (loading) {
     return (
-      <View style={styles.loader}>
+      <View style={[styles.loader, {backgroundColor: colors.background}]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
@@ -182,7 +182,6 @@ export const AppNavigator = () => {
 const styles = StyleSheet.create({
   loader: {
     alignItems: 'center',
-    backgroundColor: colors.background,
     flex: 1,
     justifyContent: 'center',
   },
