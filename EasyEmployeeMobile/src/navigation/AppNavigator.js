@@ -8,27 +8,29 @@ import {
   Building2,
   CalendarCheck,
   ClipboardList,
-  FileCheck,
   Home,
-  IndianRupee,
   LayoutDashboard,
-  ReceiptText,
-  ShieldCheck,
+  Menu,
   UserRound,
-  Users,
-  WalletCards,
 } from 'lucide-react-native';
 import {LoginScreen} from '../features/auth/LoginScreen';
+import {AdminAddTeamScreen} from '../features/admin/AdminAddTeamScreen';
+import {AdminAddUserScreen} from '../features/admin/AdminAddUserScreen';
+import {AdminAssignSalaryScreen} from '../features/admin/AdminAssignSalaryScreen';
+import {AdminAttendanceScreen} from '../features/admin/AdminAttendanceScreen';
 import {AdminHomeScreen} from '../features/admin/AdminHomeScreen';
 import {AdminExpensesScreen} from '../features/admin/AdminExpensesScreen';
 import {AdminLeavesScreen} from '../features/admin/AdminLeavesScreen';
+import {AdminMenuScreen} from '../features/admin/AdminMenuScreen';
 import {AdminPeopleScreen} from '../features/admin/AdminPeopleScreen';
 import {AdminPoliciesScreen} from '../features/admin/AdminPoliciesScreen';
 import {AdminSalaryScreen} from '../features/admin/AdminSalaryScreen';
 import {AdminTeamsScreen} from '../features/admin/AdminTeamsScreen';
 import {AttendanceScreen} from '../features/attendance/AttendanceScreen';
+import {InfoScreen} from '../features/common/InfoScreen';
 import {ExpenseScreen} from '../features/expenses/ExpenseScreen';
 import {LeaveScreen} from '../features/leave/LeaveScreen';
+import {EmployeeMenuScreen} from '../features/profile/EmployeeMenuScreen';
 import {HomeScreen} from '../features/profile/HomeScreen';
 import {ProfileScreen} from '../features/profile/ProfileScreen';
 import {SalaryScreen} from '../features/salary/SalaryScreen';
@@ -38,21 +40,16 @@ import {colors} from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+const EmployeeStackNavigator = createNativeStackNavigator();
+const AdminStackNavigator = createNativeStackNavigator();
 
 const icons = {
   Dashboard: LayoutDashboard,
   Home: Home,
   Attendance: CalendarCheck,
-  Leave: ClipboardList,
-  Salary: IndianRupee,
-  Expenses: ReceiptText,
+  Menu: Menu,
   Team: Building2,
   Profile: UserRound,
-  People: Users,
-  Teams: Building2,
-  Leaves: FileCheck,
-  Policies: ShieldCheck,
-  Payroll: WalletCards,
 };
 
 const getRole = user => String(user?.type || '').toLowerCase();
@@ -70,12 +67,9 @@ const EmployeeTabs = () => (
         return <Icon color={color} size={size} />;
       },
     })}>
-    <Tab.Screen name="Home" component={HomeScreen} />
+    <Tab.Screen name="Home" component={HomeScreen} options={{title: 'Dashboard'}} />
     <Tab.Screen name="Attendance" component={AttendanceScreen} />
-    <Tab.Screen name="Leave" component={LeaveScreen} />
-    <Tab.Screen name="Salary" component={SalaryScreen} />
-    <Tab.Screen name="Expenses" component={ExpenseScreen} />
-    <Tab.Screen name="Team" component={EmployeeTeamsScreen} />
+    <Tab.Screen name="Menu" component={EmployeeMenuScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
   </Tab.Navigator>
 );
@@ -94,14 +88,48 @@ const AdminTabs = () => (
       },
     })}>
     <Tab.Screen name="Dashboard" component={AdminHomeScreen} />
-    <Tab.Screen name="People" component={AdminPeopleScreen} />
-    <Tab.Screen name="Teams" component={AdminTeamsScreen} />
-    <Tab.Screen name="Leaves" component={AdminLeavesScreen} />
-    <Tab.Screen name="Expenses" component={AdminExpensesScreen} />
-    <Tab.Screen name="Payroll" component={AdminSalaryScreen} />
-    <Tab.Screen name="Policies" component={AdminPoliciesScreen} />
+    <Tab.Screen name="Menu" component={AdminMenuScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
   </Tab.Navigator>
+);
+
+const EmployeeStack = () => (
+  <EmployeeStackNavigator.Navigator
+    screenOptions={{
+      headerStyle: {backgroundColor: colors.surface},
+      headerTitleStyle: {color: colors.text, fontWeight: '900'},
+    }}>
+    <EmployeeStackNavigator.Screen name="EmployeeTabs" component={EmployeeTabs} options={{headerShown: false}} />
+    <EmployeeStackNavigator.Screen name="Home" component={HomeScreen} options={{title: 'Dashboard'}} />
+    <EmployeeStackNavigator.Screen name="Attendance" component={AttendanceScreen} />
+    <EmployeeStackNavigator.Screen name="Leave" component={LeaveScreen} options={{title: 'Leave Applications'}} />
+    <EmployeeStackNavigator.Screen name="Salary" component={SalaryScreen} />
+    <EmployeeStackNavigator.Screen name="EmployeeExpenses" component={ExpenseScreen} options={{title: 'Submit Expense'}} />
+    <EmployeeStackNavigator.Screen name="EmployeeTeam" component={EmployeeTeamsScreen} options={{title: 'Team'}} />
+    <EmployeeStackNavigator.Screen name="Info" component={InfoScreen} />
+  </EmployeeStackNavigator.Navigator>
+);
+
+const AdminStack = () => (
+  <AdminStackNavigator.Navigator
+    screenOptions={{
+      headerStyle: {backgroundColor: colors.surface},
+      headerTitleStyle: {color: colors.text, fontWeight: '900'},
+    }}>
+    <AdminStackNavigator.Screen name="AdminTabs" component={AdminTabs} options={{headerShown: false}} />
+    <AdminStackNavigator.Screen name="Dashboard" component={AdminHomeScreen} />
+    <AdminStackNavigator.Screen name="AdminPeople" component={AdminPeopleScreen} options={{title: 'People'}} />
+    <AdminStackNavigator.Screen name="AdminTeams" component={AdminTeamsScreen} options={{title: 'Teams'}} />
+    <AdminStackNavigator.Screen name="AdminAttendance" component={AdminAttendanceScreen} options={{title: 'Attendance'}} />
+    <AdminStackNavigator.Screen name="AdminLeaves" component={AdminLeavesScreen} options={{title: 'Leaves'}} />
+    <AdminStackNavigator.Screen name="AdminExpenses" component={AdminExpensesScreen} options={{title: 'Expenses'}} />
+    <AdminStackNavigator.Screen name="AdminAssignSalary" component={AdminAssignSalaryScreen} options={{title: 'Assign Salary'}} />
+    <AdminStackNavigator.Screen name="AdminSalaries" component={AdminSalaryScreen} options={{title: 'Salaries'}} />
+    <AdminStackNavigator.Screen name="AdminPolicies" component={AdminPoliciesScreen} options={{title: 'Payroll Policies'}} />
+    <AdminStackNavigator.Screen name="AdminAddUser" component={AdminAddUserScreen} options={{title: 'Add User'}} />
+    <AdminStackNavigator.Screen name="AdminAddTeam" component={AdminAddTeamScreen} options={{title: 'Add Team'}} />
+    <AdminStackNavigator.Screen name="Info" component={InfoScreen} />
+  </AdminStackNavigator.Navigator>
 );
 
 export const AppNavigator = () => {
@@ -127,7 +155,7 @@ export const AppNavigator = () => {
         {user ? (
           <Stack.Screen
             name={isAdmin ? 'Admin' : 'Employee'}
-            component={isAdmin ? AdminTabs : EmployeeTabs}
+            component={isAdmin ? AdminStack : EmployeeStack}
           />
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />

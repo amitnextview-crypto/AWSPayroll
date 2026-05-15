@@ -14,8 +14,9 @@ const filters = [
   {label: 'Leaders', load: getAdminLeaders},
 ];
 
-export const AdminPeopleScreen = () => {
-  const [active, setActive] = useState(0);
+export const AdminPeopleScreen = ({route}) => {
+  const initialFilter = filters.findIndex(item => item.label.toLowerCase() === route.params?.filter);
+  const [active, setActive] = useState(initialFilter >= 0 ? initialFilter : 0);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

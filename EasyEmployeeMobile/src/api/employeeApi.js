@@ -35,6 +35,8 @@ export const getAdminLeaders = () => client.get('/admin/leaders');
 export const getAdminTeams = () => client.get('/admin/teams');
 export const getAdminAllUsers = () => client.get('/admin/all-users');
 export const getAdminTeamMembers = id => client.get(`/admin/team/${id}/members`);
+export const addAdminUser = data => client.post('/admin/user', data);
+export const addAdminTeam = data => client.post('/admin/team', data);
 export const deleteAdminUser = id => client.delete(`/admin/user/${id}`);
 export const deleteAdminTeam = id => client.delete(`/admin/team/${id}`);
 export const getAdminAttendance = data =>

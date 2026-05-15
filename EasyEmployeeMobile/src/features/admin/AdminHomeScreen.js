@@ -1,20 +1,15 @@
 import React, {useEffect, useState} from 'react';
-import {ActivityIndicator, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
+import {BriefcaseBusiness, Building2, CalendarCheck, FileCheck, IndianRupee, ReceiptText, ShieldCheck, Users} from 'lucide-react-native';
 import {getAdminCounts} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
+import {MetricCard} from '../../components/MetricCard';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
-const CountCard = ({label, value}) => (
-  <Card style={styles.countCard}>
-    <Text style={styles.countValue}>{value ?? '-'}</Text>
-    <Text style={styles.countLabel}>{label}</Text>
-  </Card>
-);
-
-export const AdminHomeScreen = () => {
+export const AdminHomeScreen = ({navigation}) => {
   const {user} = useSelector(state => state.auth);
   const [counts, setCounts] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,9 +41,10 @@ export const AdminHomeScreen = () => {
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={loadCounts} tintColor={colors.primary} />
       }>
-      <View>
-        <Text style={styles.greeting}>Welcome, {user?.name}</Text>
-        <Text style={styles.sub}>Admin dashboard</Text>
+      <View style={styles.hero}>
+        <Text style={styles.eyebrow}>Target Management</Text>
+        <Text style={styles.greeting}>Hi, {user?.name || user?.username}</Text>
+        <Text style={styles.sub}>Dashboard</Text>
       </View>
 
       {loading && !counts ? (
@@ -58,51 +54,60 @@ export const AdminHomeScreen = () => {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.grid}>
-        <CountCard label="Admins" value={counts?.admin} />
-        <CountCard label="Employees" value={counts?.employee} />
-        <CountCard label="Leaders" value={counts?.leader} />
-        <CountCard label="Teams" value={counts?.team} />
+        <MetricCard icon={Users} label="Total Employee" value={counts?.employee} tone="primary" />
+        <MetricCard icon={BriefcaseBusiness} label="Total Leader" value={counts?.leader} tone="info" />
+        <MetricCard icon={ShieldCheck} label="Total Admin" value={counts?.admin} tone="warning" />
+        <MetricCard icon={Building2} label="Total Team" value={counts?.team} tone="success" />
       </View>
 
       <Card>
-        <Text style={styles.cardTitle}>Access</Text>
-        <Text style={styles.meta}>
-          Admin APIs are connected. Employee management, leave approvals, salary setup, and team actions can be added here as full admin screens.
-        </Text>
+        <Text style={styles.cardTitle}>Priority Actions</Text>
+        <View style={styles.actions}>
+          {[
+            ['Employees', Users, 'AdminPeople'],
+            ['Attendance', CalendarCheck, 'AdminAttendance'],
+            ['Leaves', FileCheck, 'AdminLeaves'],
+            ['Expenses', ReceiptText, 'AdminExpenses'],
+            ['Salaries', IndianRupee, 'AdminSalaries'],
+            ['Policies', ShieldCheck, 'AdminPolicies'],
+          ].map(([label, Icon, route]) => (
+            <Pressable key={label} onPress={() => navigation.navigate(route)} style={styles.action}>
+              <Icon color={colors.primary} size={18} />
+              <Text style={styles.actionText}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </Card>
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
+  hero: {
+    backgroundColor: colors.text,
+    borderRadius: 8,
+    padding: spacing.xl,
+  },
+  eyebrow: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+  },
   greeting: {
-    color: colors.text,
-    fontSize: 28,
+    color: colors.surface,
+    fontSize: 30,
     fontWeight: '900',
   },
   sub: {
-    color: colors.textMuted,
+    color: '#dbeafe',
     marginTop: spacing.xs,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
-  },
-  countCard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minHeight: 104,
-  },
-  countValue: {
-    color: colors.text,
-    fontSize: 30,
-    fontWeight: '900',
-  },
-  countLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    marginTop: spacing.xs,
   },
   cardTitle: {
     color: colors.text,
@@ -117,5 +122,27 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontSize: 13,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  action: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 8,
+    flexBasis: '31%',
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 72,
+    justifyContent: 'center',
+    padding: spacing.sm,
+  },
+  actionText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });

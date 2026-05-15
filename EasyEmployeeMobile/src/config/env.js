@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'https://nextviewpayrollbackendmern.onrender.com/api';
+export const API_BASE_URL = 'https://awspayroll.onrender.com/api';
 
 export const OFFICE_LOCATION = {
   latitude: 23.0361925,
