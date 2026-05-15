@@ -14,6 +14,7 @@ import {
   UserRound,
 } from 'lucide-react-native';
 import {LoginScreen} from '../features/auth/LoginScreen';
+import {ForgotPasswordScreen} from '../features/auth/ForgotPasswordScreen';
 import {AdminAddTeamScreen} from '../features/admin/AdminAddTeamScreen';
 import {AdminAddUserScreen} from '../features/admin/AdminAddUserScreen';
 import {AdminAssignSalaryScreen} from '../features/admin/AdminAssignSalaryScreen';
@@ -36,7 +37,7 @@ import {ProfileScreen} from '../features/profile/ProfileScreen';
 import {SalaryScreen} from '../features/salary/SalaryScreen';
 import {EmployeeTeamsScreen} from '../features/teams/EmployeeTeamsScreen';
 import {restoreSession} from '../store/authSlice';
-import {colors} from '../theme/colors';
+import {getThemeColors} from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -55,50 +56,46 @@ const icons = {
 const getRole = user => String(user?.type || '').toLowerCase();
 
 const EmployeeTabs = () => (
-  <Tab.Navigator
-    screenOptions={({route}) => ({
-      headerStyle: {backgroundColor: colors.surface},
-      headerTitleStyle: {color: colors.text, fontWeight: '900'},
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.textMuted,
-      tabBarStyle: styles.tabBar,
-      tabBarIcon: ({color, size}) => {
-        const Icon = icons[route.name];
-        return <Icon color={color} size={size} />;
-      },
-    })}>
+  <ThemedTabs>
     <Tab.Screen name="Home" component={HomeScreen} options={{title: 'Dashboard'}} />
     <Tab.Screen name="Attendance" component={AttendanceScreen} />
     <Tab.Screen name="Menu" component={EmployeeMenuScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
-  </Tab.Navigator>
+  </ThemedTabs>
 );
 
 const AdminTabs = () => (
-  <Tab.Navigator
-    screenOptions={({route}) => ({
-      headerStyle: {backgroundColor: colors.surface},
-      headerTitleStyle: {color: colors.text, fontWeight: '900'},
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.textMuted,
-      tabBarStyle: styles.tabBar,
-      tabBarIcon: ({color, size}) => {
-        const Icon = icons[route.name];
-        return <Icon color={color} size={size} />;
-      },
-    })}>
+  <ThemedTabs>
     <Tab.Screen name="Dashboard" component={AdminHomeScreen} />
     <Tab.Screen name="Menu" component={AdminMenuScreen} />
     <Tab.Screen name="Profile" component={ProfileScreen} />
-  </Tab.Navigator>
+  </ThemedTabs>
 );
 
+const ThemedTabs = ({children}) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  return (
+    <Tab.Navigator
+      screenOptions={({route}) => ({
+        headerStyle: {backgroundColor: colors.surface},
+        headerTitleStyle: {color: colors.text, fontWeight: '900'},
+        headerTintColor: colors.text,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: [styles.tabBar, {backgroundColor: colors.surface, borderTopColor: colors.border}],
+        tabBarIcon: ({color, size}) => {
+          const Icon = icons[route.name];
+          return <Icon color={color} size={size} />;
+        },
+      })}>
+      {children}
+    </Tab.Navigator>
+  );
+};
+
 const EmployeeStack = () => (
-  <EmployeeStackNavigator.Navigator
-    screenOptions={{
-      headerStyle: {backgroundColor: colors.surface},
-      headerTitleStyle: {color: colors.text, fontWeight: '900'},
-    }}>
+  <ThemedStack Navigator={EmployeeStackNavigator}>
     <EmployeeStackNavigator.Screen name="EmployeeTabs" component={EmployeeTabs} options={{headerShown: false}} />
     <EmployeeStackNavigator.Screen name="Home" component={HomeScreen} options={{title: 'Dashboard'}} />
     <EmployeeStackNavigator.Screen name="Attendance" component={AttendanceScreen} />
@@ -107,15 +104,11 @@ const EmployeeStack = () => (
     <EmployeeStackNavigator.Screen name="EmployeeExpenses" component={ExpenseScreen} options={{title: 'Submit Expense'}} />
     <EmployeeStackNavigator.Screen name="EmployeeTeam" component={EmployeeTeamsScreen} options={{title: 'Team'}} />
     <EmployeeStackNavigator.Screen name="Info" component={InfoScreen} />
-  </EmployeeStackNavigator.Navigator>
+  </ThemedStack>
 );
 
 const AdminStack = () => (
-  <AdminStackNavigator.Navigator
-    screenOptions={{
-      headerStyle: {backgroundColor: colors.surface},
-      headerTitleStyle: {color: colors.text, fontWeight: '900'},
-    }}>
+  <ThemedStack Navigator={AdminStackNavigator}>
     <AdminStackNavigator.Screen name="AdminTabs" component={AdminTabs} options={{headerShown: false}} />
     <AdminStackNavigator.Screen name="Dashboard" component={AdminHomeScreen} />
     <AdminStackNavigator.Screen name="AdminPeople" component={AdminPeopleScreen} options={{title: 'People'}} />
@@ -129,12 +122,30 @@ const AdminStack = () => (
     <AdminStackNavigator.Screen name="AdminAddUser" component={AdminAddUserScreen} options={{title: 'Add User'}} />
     <AdminStackNavigator.Screen name="AdminAddTeam" component={AdminAddTeamScreen} options={{title: 'Add Team'}} />
     <AdminStackNavigator.Screen name="Info" component={InfoScreen} />
-  </AdminStackNavigator.Navigator>
+  </ThemedStack>
 );
+
+const ThemedStack = ({Navigator, children}) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  return (
+    <Navigator.Navigator
+      screenOptions={{
+        headerStyle: {backgroundColor: colors.surface},
+        headerTitleStyle: {color: colors.text, fontWeight: '900'},
+        headerTintColor: colors.text,
+        contentStyle: {backgroundColor: colors.background},
+      }}>
+      {children}
+    </Navigator.Navigator>
+  );
+};
 
 export const AppNavigator = () => {
   const dispatch = useDispatch();
   const {user, loading} = useSelector(state => state.auth);
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
   const isAdmin = getRole(user) === 'admin';
 
   useEffect(() => {
@@ -158,7 +169,10 @@ export const AppNavigator = () => {
             component={isAdmin ? AdminStack : EmployeeStack}
           />
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
@@ -173,7 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabBar: {
-    borderTopColor: colors.border,
     height: 68,
     paddingBottom: 7,
     paddingTop: 5,

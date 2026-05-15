@@ -6,15 +6,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import {colors} from '../theme/colors';
+import {useSelector} from 'react-redux';
+import {getThemeColors} from '../theme/colors';
 import {spacing} from '../theme/spacing';
-
-const variants = {
-  primary: colors.primary,
-  success: colors.success,
-  danger: colors.danger,
-  muted: colors.surfaceMuted,
-};
 
 export const AppButton = ({
   title,
@@ -24,6 +18,14 @@ export const AppButton = ({
   icon: Icon,
   variant = 'primary',
 }) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  const variants = {
+    primary: colors.primary,
+    success: colors.success,
+    danger: colors.danger,
+    muted: colors.surfaceMuted,
+  };
   const backgroundColor = variants[variant] || colors.primary;
   const isMuted = variant === 'muted';
   return (
