@@ -28,6 +28,7 @@ export const AppButton = ({
   };
   const backgroundColor = variants[variant] || colors.primary;
   const isMuted = variant === 'muted';
+  const foregroundColor = isMuted ? colors.text : colors.surface;
   return (
     <Pressable
       accessibilityRole="button"
@@ -38,17 +39,17 @@ export const AppButton = ({
         {backgroundColor, opacity: disabled || loading ? 0.55 : pressed ? 0.85 : 1},
       ]}>
       {loading ? (
-        <ActivityIndicator color={isMuted ? colors.text : colors.surface} />
+        <ActivityIndicator color={foregroundColor} />
       ) : (
         <View style={styles.content}>
           {Icon ? (
             <Icon
-              color={isMuted ? colors.text : colors.surface}
+              color={foregroundColor}
               size={18}
               strokeWidth={2.2}
             />
           ) : null}
-          <Text style={[styles.text, isMuted && styles.mutedText]}>{title}</Text>
+          <Text style={[styles.text, {color: foregroundColor}]}>{title}</Text>
         </View>
       )}
     </Pressable>
@@ -69,11 +70,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   text: {
-    color: colors.surface,
     fontSize: 15,
     fontWeight: '700',
-  },
-  mutedText: {
-    color: colors.text,
   },
 });
