@@ -5,7 +5,7 @@ import {Lock, LogIn, Mail} from 'lucide-react-native';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Screen} from '../../components/Screen';
-import {clearAuthError, loginEmployee} from '../../store/authSlice';
+import {clearAuthError, loginUser} from '../../store/authSlice';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
@@ -26,7 +26,7 @@ export const LoginScreen = () => {
       return;
     }
     setLocalError('');
-    dispatch(loginEmployee({email: email.trim(), password}));
+    dispatch(loginUser({email: email.trim(), password}));
   };
 
   return (
@@ -36,7 +36,7 @@ export const LoginScreen = () => {
         style={styles.wrap}>
         <View style={styles.brand}>
           <Text style={styles.title}>Easy Employee</Text>
-          <Text style={styles.subtitle}>Payroll, attendance, leave, and salary in one place.</Text>
+          <Text style={styles.subtitle}>Admin and employee payroll access in one place.</Text>
         </View>
 
         <View style={styles.form}>

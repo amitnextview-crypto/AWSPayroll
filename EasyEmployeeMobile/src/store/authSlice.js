@@ -2,18 +2,20 @@ import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
 import {login, logout, refreshSession} from '../api/employeeApi';
 import {tokenStorage} from '../services/tokenStorage';
 
-const isEmployee = user => String(user?.type || '').toLowerCase() === 'employee';
+const allowedRoles = ['admin', 'employee'];
+const userRole = user => String(user?.type || '').toLowerCase();
+const canUseApp = user => allowedRoles.includes(userRole(user));
 
-export const loginEmployee = createAsyncThunk(
-  'auth/loginEmployee',
+export const loginUser = createAsyncThunk(
+  'auth/loginUser',
   async (credentials, {rejectWithValue}) => {
     try {
       const response = await login(credentials);
       if (!response?.success) {
         return rejectWithValue(response?.message || 'Login failed.');
       }
-      if (!isEmployee(response.user)) {
-        return rejectWithValue('Only employee accounts can login to this app.');
+      if (!canUseApp(response.user)) {
+        return rejectWithValue('Only admin and employee accounts can login to this app.');
       }
       if (response.tokens) {
         await tokenStorage.save(response.tokens);
@@ -34,7 +36,7 @@ export const restoreSession = createAsyncThunk(
         return null;
       }
       const response = await refreshSession();
-      if (!response?.success || !isEmployee(response.user)) {
+      if (!response?.success || !canUseApp(response.user)) {
         await tokenStorage.clear();
         return null;
       }
@@ -49,7 +51,7 @@ export const restoreSession = createAsyncThunk(
   },
 );
 
-export const logoutEmployee = createAsyncThunk('auth/logoutEmployee', async () => {
+export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   try {
     await logout();
   } finally {
@@ -72,15 +74,15 @@ const authSlice = createSlice({
   },
   extraReducers: builder => {
     builder
-      .addCase(loginEmployee.pending, state => {
+      .addCase(loginUser.pending, state => {
         state.loginLoading = true;
         state.error = null;
       })
-      .addCase(loginEmployee.fulfilled, (state, action) => {
+      .addCase(loginUser.fulfilled, (state, action) => {
         state.loginLoading = false;
         state.user = action.payload;
       })
-      .addCase(loginEmployee.rejected, (state, action) => {
+      .addCase(loginUser.rejected, (state, action) => {
         state.loginLoading = false;
         state.error = action.payload || 'Login failed.';
       })
@@ -95,11 +97,13 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = null;
       })
-      .addCase(logoutEmployee.fulfilled, state => {
+      .addCase(logoutUser.fulfilled, state => {
         state.user = null;
       });
   },
 });
 
 export const {clearAuthError} = authSlice.actions;
+export const loginEmployee = loginUser;
+export const logoutEmployee = logoutUser;
 export default authSlice.reducer;

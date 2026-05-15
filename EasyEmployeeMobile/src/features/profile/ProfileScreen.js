@@ -5,7 +5,7 @@ import {LogOut} from 'lucide-react-native';
 import {AppButton} from '../../components/AppButton';
 import {Card} from '../../components/Card';
 import {Screen} from '../../components/Screen';
-import {logoutEmployee} from '../../store/authSlice';
+import {logoutUser} from '../../store/authSlice';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
@@ -46,7 +46,7 @@ export const ProfileScreen = () => {
 
       <AppButton
         icon={LogOut}
-        onPress={() => dispatch(logoutEmployee())}
+        onPress={() => dispatch(logoutUser())}
         title="Logout"
         variant="danger"
       />
