@@ -11,7 +11,19 @@ const AttendanceSchema = new Schema({
   attendanceIn: { type: String },
   attendanceOut: { type: String },
   late: { type: String },
-  totalHours: { type: String }
+  totalHours: { type: String },
+  checkInLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    accuracy: { type: Number },
+    distanceMeters: { type: Number }
+  },
+  checkOutLocation: {
+    latitude: { type: Number },
+    longitude: { type: Number },
+    accuracy: { type: Number },
+    distanceMeters: { type: Number }
+  }
 });
 
 module.exports = mongoose.model('Attendance', AttendanceSchema);

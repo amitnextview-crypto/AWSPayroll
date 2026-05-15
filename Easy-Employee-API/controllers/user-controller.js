@@ -12,6 +12,67 @@ const crypto = require('crypto');
 const teamService = require('../services/team-service');
 const attendanceService = require('../services/attendance-service');
 
+const OFFICE_LOCATION = {
+  latitude: Number(process.env.OFFICE_LATITUDE || 23.0361925),
+  longitude: Number(process.env.OFFICE_LONGITUDE || 72.5133962),
+  radiusMeters: Number(process.env.OFFICE_RADIUS_METERS || 300),
+};
+
+const distanceInMeters = (from, to = OFFICE_LOCATION) => {
+  const toRadians = value => (value * Math.PI) / 180;
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(to.latitude - from.latitude);
+  const dLng = toRadians(to.longitude - from.longitude);
+  const lat1 = toRadians(from.latitude);
+  const lat2 = toRadians(to.latitude);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+};
+
+const validateAttendanceLocation = async (employeeID, latitude, longitude) => {
+  const employee = await userService.findUser({ _id: employeeID });
+  if (!employee) {
+    return { valid: false, message: "Employee not found" };
+  }
+
+  if (String(employee.workType).toLowerCase() !== "onsite") {
+    return { valid: true };
+  }
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { valid: false, message: "Office location verification is required" };
+  }
+
+  const distanceMeters = distanceInMeters({ latitude: lat, longitude: lng });
+  if (distanceMeters > OFFICE_LOCATION.radiusMeters) {
+    return {
+      valid: false,
+      message: `You are outside the office radius (${Math.round(distanceMeters)}m away)`,
+    };
+  }
+
+  return { valid: true, distanceMeters };
+};
+
+const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters) => {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return undefined;
+  }
+  return {
+    latitude: lat,
+    longitude: lng,
+    accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : undefined,
+    distanceMeters,
+  };
+};
+
 
 class UserController {
   calculateCurrentMonthSalaries = async (req, res) => {
@@ -401,7 +462,11 @@ createUser = async (req, res) => {
 
  checkInEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID } = req.body;
+    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
+    if (!locationCheck.valid) {
+      return res.json({ success: false, message: locationCheck.message });
+    }
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const d = new Date();
 
@@ -428,6 +493,12 @@ createUser = async (req, res) => {
       present: true,
       attendanceIn,
       late,
+      checkInLocation: attendanceLocationPayload(
+        latitude,
+        longitude,
+        accuracy,
+        locationCheck.distanceMeters
+      ),
     };
 
     // ✅ Prevent duplicate check-ins
@@ -456,7 +527,11 @@ createUser = async (req, res) => {
 
 checkOutEmployeeAttendance = async (req, res, next) => {
   try {
-    const { employeeID } = req.body;
+    const { employeeID, latitude, longitude, accuracy } = req.body;
+    const locationCheck = await validateAttendanceLocation(employeeID, latitude, longitude);
+    if (!locationCheck.valid) {
+      return res.json({ success: false, message: locationCheck.message });
+    }
     const d = new Date();
 
     const year = d.getFullYear();
@@ -491,6 +566,12 @@ checkOutEmployeeAttendance = async (req, res, next) => {
     const updated = await attendanceService.updateAttendanceOut(record._id, {
       attendanceOut,
       totalHours,
+      checkOutLocation: attendanceLocationPayload(
+        latitude,
+        longitude,
+        accuracy,
+        locationCheck.distanceMeters
+      ),
     });
 
     res.json({ success: true, data: updated, message: "Checked Out successfully!" });

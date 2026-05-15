@@ -1,0 +1,50 @@
+{
+  "name": "AWSPayroll",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start",
+    "lint": "eslint .",
+    "test": "jest",
+    "build:android:debug": "cd android && gradle assembleDebug",
+    "build:android:release": "cd android && gradle assembleRelease"
+  },
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "^6.6.1",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.11.0",
+    "@reduxjs/toolkit": "^2.2.7",
+    "axios": "^1.7.7",
+    "lucide-react-native": "^0.468.0",
+    "react": "18.3.1",
+    "react-native": "0.76.6",
+    "react-native-geolocation-service": "^5.3.1",
+    "react-native-keychain": "^9.2.2",
+    "react-native-safe-area-context": "^4.12.0",
+    "react-native-screens": "^3.35.0",
+    "react-native-svg": "^15.8.0",
+    "react-redux": "^9.1.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "^15.0.0",
+    "@react-native/babel-preset": "0.76.6",
+    "@react-native/eslint-config": "0.76.6",
+    "@react-native/metro-config": "0.76.6",
+    "@react-native/typescript-config": "0.76.6",
+    "@types/jest": "^29.5.13",
+    "@types/react": "^18.3.5",
+    "@types/react-test-renderer": "^18.3.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "react-test-renderer": "18.3.1",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

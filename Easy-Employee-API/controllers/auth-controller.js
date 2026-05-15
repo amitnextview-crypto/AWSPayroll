@@ -31,8 +31,6 @@ class AuthController {
             type
         }
         const {accessToken,refreshToken} = tokenService.generateToken(payload);
-        console.log("Access Token", accessToken);
-        console.log("Refresh Token", refreshToken);
         await tokenService.storeRefreshToken(_id,refreshToken);
         
         const cookieOptions = {
@@ -46,9 +44,12 @@ class AuthController {
 res.cookie("accessToken", accessToken, cookieOptions);
 res.cookie("refreshToken", refreshToken, cookieOptions);
 
-
-        console.log(res);
-        res.json({success:true,message:'Login Successfull',user:new UserDto(user)})
+        res.json({
+            success:true,
+            message:'Login Successfull',
+            user:new UserDto(user),
+            tokens:{accessToken,refreshToken}
+        })
     }
 
     forgot = async (req,res,next) =>
@@ -116,15 +117,21 @@ res.cookie("refreshToken", refreshToken, cookieOptions);
         }
         const {accessToken,refreshToken} = tokenService.generateToken(payload);
         await tokenService.updateRefreshToken(_id,refreshTokenFromCookie,refreshToken);
-        res.cookie('accessToken',accessToken,{
-            maxAge:1000*60*60*24*30,
-            httpOnly:true
+        const cookieOptions = {
+            httpOnly: true,
+            secure: true,
+            sameSite: "none",
+            path: "/",
+            maxAge: 1000 * 60 * 60 * 24 * 30,
+        };
+        res.cookie('accessToken',accessToken,cookieOptions)
+        res.cookie('refreshToken',refreshToken,cookieOptions)
+        res.json({
+            success:true,
+            message:'Secure access has been granted',
+            user:new UserDto(user),
+            tokens:{accessToken,refreshToken}
         })
-        res.cookie('refreshToken',refreshToken,{
-            maxAge:1000*60*60*24*30,
-            httpOnly:true
-        })
-        res.json({success:true,message:'Secure access has been granted',user:new UserDto(user)})
     }
 
 }
