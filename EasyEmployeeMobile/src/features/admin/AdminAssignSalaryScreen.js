@@ -31,6 +31,7 @@ const emptySalary = {
 };
 
 const numeric = value => Number(value || 0);
+const PF_AMOUNT_LIMIT = 1800;
 
 export const AdminAssignSalaryScreen = () => {
   const [employees, setEmployees] = useState([]);
@@ -57,8 +58,10 @@ export const AdminAssignSalaryScreen = () => {
       numeric(form.bonus) +
       numeric(form.otherBenefits) +
       overtimePay;
-    const pfEmployee = (numeric(form.basic) * numeric(form.pfEmployeePercent)) / 100;
-    const pfEmployer = (numeric(form.basic) * numeric(form.pfEmployerPercent)) / 100;
+    const pfEmployeeRaw = (numeric(form.basic) * numeric(form.pfEmployeePercent)) / 100;
+    const pfEmployerRaw = (numeric(form.basic) * numeric(form.pfEmployerPercent)) / 100;
+    const pfEmployee = Math.min(pfEmployeeRaw, PF_AMOUNT_LIMIT);
+    const pfEmployer = Math.min(pfEmployerRaw, PF_AMOUNT_LIMIT);
     const esiEmployee = (gross * numeric(form.esiEmployeePercent)) / 100;
     const esiEmployer = (gross * numeric(form.esiEmployerPercent)) / 100;
     const tdsMonthly = numeric(form.tdsMonthlyOverride);
@@ -190,6 +193,8 @@ export const AdminAssignSalaryScreen = () => {
           <Text style={styles.summaryText}>ESI Employee: {formatCurrency(totals.esiEmployee)}</Text>
           <Text style={styles.summaryText}>Deductions: {formatCurrency(totals.deductions)}</Text>
           <Text style={styles.net}>Net Salary: {formatCurrency(totals.net)}</Text>
+          <Text style={styles.summaryText}>Yearly Gross: {formatCurrency(totals.gross * 12)}</Text>
+          <Text style={styles.summaryText}>Yearly Net: {formatCurrency(totals.net * 12)}</Text>
         </View>
         <AppButton loading={loading} onPress={submit} title="Assign Salary" />
       </Card>

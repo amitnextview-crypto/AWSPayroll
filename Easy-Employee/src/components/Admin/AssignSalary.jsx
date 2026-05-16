@@ -8,6 +8,7 @@ import DatePicker from "react-datepicker";
 import { useSelector } from "react-redux";
 
 const AssignSalary = () => {
+  const PF_AMOUNT_LIMIT = 1800;
   const initialState = {
     basic: "",
     hra: "",
@@ -91,8 +92,10 @@ const AssignSalary = () => {
     );
   }, [formData, overtimePay]);
 
-  const pfEmployee = (n(formData.basic) * n(formData.pfEmployeePercent)) / 100;
-  const pfEmployer = (n(formData.basic) * n(formData.pfEmployerPercent)) / 100;
+  const pfEmployeeRaw = (n(formData.basic) * n(formData.pfEmployeePercent)) / 100;
+  const pfEmployerRaw = (n(formData.basic) * n(formData.pfEmployerPercent)) / 100;
+  const pfEmployee = Math.min(pfEmployeeRaw, PF_AMOUNT_LIMIT);
+  const pfEmployer = Math.min(pfEmployerRaw, PF_AMOUNT_LIMIT);
   const esiEmployee = (grossEarnings * n(formData.esiEmployeePercent)) / 100;
   const esiEmployer = (grossEarnings * n(formData.esiEmployerPercent)) / 100;
   const professionalTax = n(formData.professionalTax);
@@ -138,6 +141,8 @@ const AssignSalary = () => {
   const totalDeductions =
     pfEmployee + esiEmployee + professionalTax + loanRecovery + monthlyTDS;
   const netPay = Math.max(0, grossEarnings - totalDeductions);
+  const annualGross = grossEarnings * 12;
+  const annualNetPay = netPay * 12;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -332,13 +337,16 @@ const AssignSalary = () => {
                       <tr><td>Overtime Pay</td><td>₹ {overtimePay}</td></tr>
                       <tr><td>Other Benefits</td><td>₹ {n(formData.otherBenefits)}</td></tr>
                       <tr className="table-success"><td><strong>Gross Earnings</strong></td><td><strong>₹ {grossEarnings.toFixed(2)}</strong></td></tr>
-                      <tr><td>PF (Employee)</td><td>- ₹ {pfEmployee.toFixed(2)}</td></tr>
+                      <tr><td>PF (Employee)</td><td>- ₹ {pfEmployee.toFixed(2)} {pfEmployeeRaw > PF_AMOUNT_LIMIT ? "(capped at 1800)" : ""}</td></tr>
+                      <tr><td>PF (Employer)</td><td>₹ {pfEmployer.toFixed(2)} {pfEmployerRaw > PF_AMOUNT_LIMIT ? "(capped at 1800)" : ""}</td></tr>
                       <tr><td>ESI (Employee)</td><td>- ₹ {esiEmployee.toFixed(2)}</td></tr>
                       <tr><td>Professional Tax</td><td>- ₹ {professionalTax.toFixed(2)}</td></tr>
                       <tr><td>Loan Recovery</td><td>- ₹ {loanRecovery.toFixed(2)}</td></tr>
                       <tr><td>TDS</td><td>- ₹ {monthlyTDS.toFixed(2)}</td></tr>
                       <tr className="table-warning"><td><strong>Total Deductions</strong></td><td><strong>₹ {totalDeductions.toFixed(2)}</strong></td></tr>
                       <tr className="table-primary"><td><strong>Net Pay (In-Hand)</strong></td><td><strong>₹ {netPay.toFixed(2)}</strong></td></tr>
+                      <tr className="table-info"><td><strong>Yearly Gross Salary</strong></td><td><strong>₹ {annualGross.toFixed(2)}</strong></td></tr>
+                      <tr className="table-info"><td><strong>Yearly Net Salary</strong></td><td><strong>₹ {annualNetPay.toFixed(2)}</strong></td></tr>
                     </tbody>
                   </table>
                 </div>

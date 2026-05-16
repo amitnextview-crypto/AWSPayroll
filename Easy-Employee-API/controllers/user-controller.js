@@ -18,6 +18,8 @@ const toNumber = value => {
   return Number.isFinite(number) ? number : 0;
 };
 
+const PF_AMOUNT_LIMIT = 1800;
+
 const getDateParts = (date = new Date()) => ({
   year: date.getFullYear(),
   month: date.getMonth() + 1,
@@ -89,6 +91,8 @@ const normalizeSalaryPayload = data => {
   };
   if (!deductions.pfEmployee) deductions.pfEmployee = (earnings.basic * deductions.pfEmployeePercent) / 100;
   if (!deductions.pfEmployer) deductions.pfEmployer = (earnings.basic * deductions.pfEmployerPercent) / 100;
+  deductions.pfEmployee = Math.min(deductions.pfEmployee, PF_AMOUNT_LIMIT);
+  deductions.pfEmployer = Math.min(deductions.pfEmployer, PF_AMOUNT_LIMIT);
   if (!deductions.esiEmployee) deductions.esiEmployee = (earnings.gross * deductions.esiEmployeePercent) / 100;
   if (!deductions.esiEmployer) deductions.esiEmployer = (earnings.gross * deductions.esiEmployerPercent) / 100;
   deductions.totalDeductions =

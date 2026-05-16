@@ -9,28 +9,34 @@ const AddUser = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showAdminPassword, setShowAdminPassword] = useState(false);
 
+  const testSuffix = Date.now().toString().slice(-5);
   const initialState = {
-    name: "",
-    username: "",
-    email: "",
-    mobile: "",
-    password: "",
+    name: "Test Employee",
+    username: `EMP${testSuffix}`,
+    email: `test.employee${testSuffix}@example.com`,
+    mobile: "9876543210",
+    password: "Test@123",
     type: "Employee",
     workType: "Onsite", // ✅ added
-    designation: "",
-    address: "",
+    designation: "Software Engineer",
+    address: "Ahmedabad, Gujarat",
     profile: "",
     adminPassword: "",
-    aadhaarNumber: "",
-    panNumber: "",
-    bankName: "",
-    accountNumber: "",
-    ifscCode: "",
+    aadhaarNumber: "123456789012",
+    panNumber: "ABCDE1234F",
+    bankName: "HDFC Bank",
+    accountNumber: "123456789012",
+    ifscCode: "HDFC0001234",
     uan: "", // ✅ added
     esi: "", // ✅ added
   };
 
-  const [formData, setFormData] = useState(initialState);
+  const defaultTestingForm = {
+    ...initialState,
+    uan: "100200300400",
+    esi: "ESI123456789",
+  };
+  const [formData, setFormData] = useState(defaultTestingForm);
   const [showModal, setShowModal] = useState(false);
 
   const inputEvent = (e) => {
@@ -106,7 +112,13 @@ const AddUser = () => {
     if (success) {
       toast.success(message);
       setShowModal(false);
-      setFormData({ ...initialState });
+      setFormData({
+        ...initialState,
+        username: `EMP${Date.now().toString().slice(-5)}`,
+        email: `test.employee${Date.now().toString().slice(-5)}@example.com`,
+        uan: "100200300400",
+        esi: "ESI123456789",
+      });
       setImagePreview("/assets/icons/user.png");
     } else {
       toast.error(message || "Failed to add user");
