@@ -587,26 +587,28 @@ createUser = async (req, res) => {
       const currentMonth = today.month;
       const currentYear = today.year;
       const todayIso = new Date().toISOString().split('T')[0];
+      const workforceFilter = { type: { $in: ['employee', 'leader'] } };
+      const activeWorkforceFilter = { ...workforceFilter, status: 'active' };
 
       const [
         totalEmployees,
-        activeEmployees,
+        workforceUsers,
         totalTeams,
         totalLeaders,
-        pendingLeaveRequests,
+        pendingLeaves,
         todayAttendance,
-        leaveToday,
+        leavesToday,
         salarySummary,
         recentLeaves,
         recentUsers,
       ] = await Promise.all([
-        User.countDocuments({ type: 'employee' }),
-        User.countDocuments({ type: 'employee', status: 'active' }),
+        User.countDocuments(workforceFilter),
+        User.find(activeWorkforceFilter).select('name username email employeeCode type status'),
         Team.countDocuments({ status: { $ne: 'deleted' } }),
         User.countDocuments({ type: 'leader' }),
-        Leave.countDocuments({ adminResponse: 'Pending' }),
+        Leave.find({ adminResponse: 'Pending' }).sort({ createdAt: -1 }),
         Attendance.find({ year: today.year, month: today.month, date: today.date }),
-        Leave.countDocuments({
+        Leave.find({
           adminResponse: 'Approved',
           startDate: { $lte: todayIso },
           endDate: { $gte: todayIso },
@@ -632,12 +634,45 @@ createUser = async (req, res) => {
           },
         ]),
         Leave.find({}).sort({ createdAt: -1 }).limit(5),
-        User.find({}).sort({ createdAt: -1 }).limit(5),
+        User.find(workforceFilter).sort({ createdAt: -1 }).limit(5),
       ]);
 
-      const presentToday = todayAttendance.filter(item => item.present).length;
-      const absentToday = Math.max(activeEmployees - presentToday - leaveToday, 0);
+      const workforceIds = new Set(workforceUsers.map(user => String(user._id)));
+      const approvedLeaveIds = new Set(leavesToday.map(leave => String(leave.applicantID)));
+      const presentIds = new Set(
+        todayAttendance
+          .filter(item => item.present && workforceIds.has(String(item.employeeID)))
+          .map(item => String(item.employeeID)),
+      );
+      const presentToday = presentIds.size;
+      const leaveToday = leavesToday.filter(leave => workforceIds.has(String(leave.applicantID))).length;
+      const absentUsers = workforceUsers.filter(user => !presentIds.has(String(user._id)) && !approvedLeaveIds.has(String(user._id)));
+      const absentToday = absentUsers.length;
+      const pendingLeaveRequests = pendingLeaves.filter(leave => workforceIds.has(String(leave.applicantID))).length;
       const payrollSummary = salarySummary[0] || { gross: 0, netPay: 0, deductions: 0, employees: 0 };
+      const pendingLeaveList = pendingLeaves
+        .filter(leave => workforceIds.has(String(leave.applicantID)))
+        .slice(0, 10)
+        .map(leave => ({
+          id: leave._id,
+          employeeID: leave.applicantID,
+          name: leave.applicantName,
+          email: leave.applicantEmail,
+          type: leave.type,
+          status: leave.adminResponse,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          title: `${leave.applicantName} (${leave.applicantID}) - ${leave.type}`,
+        }));
+      const absentList = absentUsers.slice(0, 10).map(user => ({
+        id: user._id,
+        employeeID: user._id,
+        name: user.name,
+        email: user.email,
+        username: user.username,
+        employeeCode: user.employeeCode,
+        title: `${user.name || user.username} (${user.username || user.employeeCode || user._id})`,
+      }));
       const recentActivities = [
         ...recentLeaves.map(leave => ({
           type: 'Leave',
@@ -667,6 +702,8 @@ createUser = async (req, res) => {
           pendingLeaveRequests,
           payrollSummary,
           recentActivities,
+          pendingLeaveList,
+          absentList,
           notifications: [
             pendingLeaveRequests
               ? `${pendingLeaveRequests} leave request${pendingLeaveRequests > 1 ? 's' : ''} need review`
@@ -876,6 +913,8 @@ updateEmployeeAttendance = async (req, res, next) => {
       month,
       year,
       day,
+      status,
+      timeStatus: bodyTimeStatus,
     } = req.body;
 
     // 🧩 Validation
@@ -905,9 +944,9 @@ updateEmployeeAttendance = async (req, res, next) => {
         attendanceOut: "-",
         totalHours: "-",
         late: "-",
-        timeStatus: "-",
+        timeStatus: bodyTimeStatus || "-",
         present: false,
-        status: "Absent",
+        status: status || "Absent",
         date,
         month,
         year,
@@ -1137,6 +1176,18 @@ autoMarkAttendanceForAll = async () => {
   } catch (error) {
     console.error("Update Salary Error:", error);
     res.json({ success: false, message: 'Update Failed', error: error.message });
+  }
+};
+
+deleteEmployeeAttendance = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid attendance id'));
+    const deleted = await attendanceService.deleteAttendance(id);
+    if (!deleted) return next(ErrorHandler.notFound('Attendance not found'));
+    res.json({ success: true, message: 'Attendance deleted' });
+  } catch (error) {
+    res.json({ success: false, message: error.message || 'Attendance could not be deleted' });
   }
 };
 

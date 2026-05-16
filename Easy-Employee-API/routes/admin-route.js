@@ -46,6 +46,7 @@ router.delete('/team/:id', asyncMiddleware(teamController.deleteTeam)); // ✅ k
 router.patch('/update-team/:id', asyncMiddleware(teamController.updateTeamData)); // <-- ADD THIS
 router.patch('/update-salary/:id', asyncMiddleware(userController.updateEmployeeSalary));
 router.post('/update-employee-attendance', asyncMiddleware(userController.updateEmployeeAttendance));
+router.delete('/attendance/:id', asyncMiddleware(userController.deleteEmployeeAttendance));
 router.patch('/update-leave/:id', asyncMiddleware(userController.updateLeaveApplication)); // <-- ADD THIS
 // 💰 Employee Expense APIs
 router.get("/expenses", asyncMiddleware(expenseController.getExpenses));

@@ -12,6 +12,7 @@ const AttendanceSchema = new Schema({
   attendanceOut: { type: String },
   late: { type: String },
   totalHours: { type: String },
+  timeStatus: { type: String },
   status: {
     type: String,
     enum: ['Present', 'Absent', 'Half Day', 'Leave', 'Approved Leave'],

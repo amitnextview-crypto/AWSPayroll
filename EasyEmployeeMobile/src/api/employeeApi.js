@@ -51,6 +51,8 @@ export const getAdminAttendance = data =>
   client.post('/admin/view-employee-attendance', data);
 export const updateAdminAttendance = data =>
   client.post('/admin/update-employee-attendance', data);
+export const deleteAdminAttendance = id =>
+  client.delete(`/admin/attendance/${id}`);
 export const getAdminLeaves = data =>
   client.post('/admin/view-leave-applications', data);
 export const updateAdminLeave = (id, data) =>

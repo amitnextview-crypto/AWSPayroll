@@ -1,29 +1,37 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {ChevronRight} from 'lucide-react-native';
-import {colors} from '../theme/colors';
+import {useSelector} from 'react-redux';
+import {getThemeColors} from '../theme/colors';
 import {spacing} from '../theme/spacing';
 
-export const MenuGrid = ({items}) => (
+const accents = ['#2457c5', '#0b7f86', '#b98215', '#7c3aed', '#16885f', '#c43d2f'];
+
+export const MenuGrid = ({items}) => {
+  const themeMode = useSelector(state => state.ui.themeMode);
+  const colors = getThemeColors(themeMode);
+  return (
   <View style={styles.grid}>
-    {items.map(item => {
+    {items.map((item, index) => {
       const Icon = item.icon;
+      const accent = accents[index % accents.length];
       return (
         <Pressable
           key={item.label}
           onPress={item.onPress}
-          style={({pressed}) => [styles.item, pressed && styles.pressed]}>
-          <View style={styles.iconBox}>{Icon ? <Icon color={colors.primary} size={20} /> : null}</View>
+          style={({pressed}) => [styles.item, {backgroundColor: colors.surface, borderColor: colors.border}, pressed && styles.pressed]}>
+          <View style={[styles.iconBox, {backgroundColor: `${accent}18`}]}>{Icon ? <Icon color={accent} size={20} /> : null}</View>
           <View style={styles.textWrap}>
-            <Text style={styles.label}>{item.label}</Text>
-            {item.caption ? <Text style={styles.caption}>{item.caption}</Text> : null}
+            <Text style={[styles.label, {color: colors.text}]}>{item.label}</Text>
+            {item.caption ? <Text style={[styles.caption, {color: colors.textMuted}]}>{item.caption}</Text> : null}
           </View>
           <ChevronRight color={colors.textMuted} size={18} />
         </Pressable>
       );
     })}
   </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   grid: {
@@ -31,21 +39,23 @@ const styles = StyleSheet.create({
   },
   item: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
+    elevation: 2,
     flexDirection: 'row',
     gap: spacing.md,
     minHeight: 68,
     padding: spacing.md,
+    shadowColor: '#24406f',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
   },
   pressed: {
     opacity: 0.78,
   },
   iconBox: {
     alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
     borderRadius: 8,
     height: 42,
     justifyContent: 'center',
@@ -55,12 +65,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: colors.text,
     fontSize: 15,
     fontWeight: '900',
   },
   caption: {
-    color: colors.textMuted,
     fontSize: 12,
     marginTop: spacing.xs,
   },

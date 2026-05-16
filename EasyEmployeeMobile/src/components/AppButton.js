@@ -36,7 +36,8 @@ export const AppButton = ({
       onPress={onPress}
       style={({pressed}) => [
         styles.button,
-        {backgroundColor, opacity: disabled || loading ? 0.55 : pressed ? 0.85 : 1},
+        {backgroundColor, opacity: disabled || loading ? 0.55 : pressed ? 0.88 : 1},
+        !isMuted && styles.raised,
       ]}>
       {loading ? (
         <ActivityIndicator color={foregroundColor} />
@@ -63,6 +64,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  raised: {
+    elevation: 2,
+    shadowColor: '#183b88',
+    shadowOffset: {width: 0, height: 5},
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
   },
   content: {
     alignItems: 'center',

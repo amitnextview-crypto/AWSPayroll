@@ -18,6 +18,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 8,
     borderWidth: 1,
+    elevation: 3,
     padding: spacing.lg,
+    shadowColor: '#24406f',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
   },
 });

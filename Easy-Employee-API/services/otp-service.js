@@ -14,7 +14,7 @@ class OtpService {
         const otpData = await OtpModel.findOne({userId,otp,type});
         if(otpData)
         {
-            const now = new Date(1635966633159);
+            const now = new Date();
             await this.removeOtp(userId);
             if(now<otpData.expire)
             {

@@ -114,6 +114,24 @@ export const AdminHomeScreen = ({navigation}) => {
         {(dashboard?.notifications || []).map(item => (
           <Text key={item} style={styles.meta}>- {item}</Text>
         ))}
+        {(dashboard?.pendingLeaveList || []).map(item => (
+          <Pressable
+            key={`leave-${item.id}`}
+            onPress={() => navigation.navigate('AdminLeaves', {employeeID: item.employeeID, leaveID: item.id})}
+            style={styles.notificationItem}>
+            <Text style={styles.notificationTitle}>Pending leave: {item.name || '-'}</Text>
+            <Text style={styles.meta}>ID: {item.employeeID || '-'} / {item.type || '-'} / {item.startDate || '-'} to {item.endDate || '-'}</Text>
+          </Pressable>
+        ))}
+        {(dashboard?.absentList || []).map(item => (
+          <Pressable
+            key={`absent-${item.id}`}
+            onPress={() => navigation.navigate('AdminAttendance', {employeeID: item.employeeID, date: new Date().getDate()})}
+            style={styles.notificationItem}>
+            <Text style={styles.notificationTitle}>Absent today: {item.name || '-'}</Text>
+            <Text style={styles.meta}>ID: {item.username || item.employeeCode || item.employeeID || '-'}</Text>
+          </Pressable>
+        ))}
       </Card>
 
       <Card>
@@ -207,5 +225,17 @@ const styles = StyleSheet.create({
   activityTitle: {
     color: colors.text,
     fontWeight: '800',
+  },
+  notificationItem: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  notificationTitle: {
+    color: colors.text,
+    fontWeight: '900',
   },
 });

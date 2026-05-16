@@ -18,9 +18,9 @@ const filters = [
   {label: 'Rejected', value: 'Rejected'},
 ];
 
-export const AdminLeavesScreen = () => {
+export const AdminLeavesScreen = ({route}) => {
   const [items, setItems] = useState([]);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(route?.params?.employeeID ? '' : '');
   const [rejecting, setRejecting] = useState('');
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,9 @@ export const AdminLeavesScreen = () => {
     setToast('');
     try {
       const response = await getAdminLeaves(status ? {adminResponse: status} : {});
-      setItems(response?.data || response?.applications || []);
+      const list = response?.data || response?.applications || [];
+      const employeeID = route?.params?.employeeID ? String(route.params.employeeID) : '';
+      setItems(employeeID ? list.filter(item => String(item.applicantID) === employeeID) : list);
     } catch (err) {
       setToast(err.message || 'Leave applications could not be loaded.');
     } finally {
@@ -41,7 +43,7 @@ export const AdminLeavesScreen = () => {
 
   useEffect(() => {
     load();
-  }, [status]);
+  }, [route?.params?.employeeID, status]);
 
   const approve = async item => {
     try {

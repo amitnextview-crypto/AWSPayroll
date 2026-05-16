@@ -2,7 +2,7 @@ import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
 import {login, logout, refreshSession} from '../api/employeeApi';
 import {tokenStorage} from '../services/tokenStorage';
 
-const allowedRoles = ['admin', 'employee'];
+const allowedRoles = ['admin', 'employee', 'leader'];
 const userRole = user => String(user?.type || '').toLowerCase();
 const canUseApp = user => allowedRoles.includes(userRole(user));
 
@@ -15,7 +15,7 @@ export const loginUser = createAsyncThunk(
         return rejectWithValue(response?.message || 'Login failed.');
       }
       if (!canUseApp(response.user)) {
-        return rejectWithValue('Only admin and employee accounts can login to this app.');
+        return rejectWithValue('Only admin, employee, and leader accounts can login to this app.');
       }
       if (response.tokens) {
         await tokenStorage.save(response.tokens);

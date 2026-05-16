@@ -15,6 +15,8 @@ class AttendanceService {
   updateAttendance = async (id, updateData) => {
     return Attendance.findByIdAndUpdate(id, updateData, { new: true });
   };
+
+  deleteAttendance = async id => Attendance.findByIdAndDelete(id);
 }
 
 module.exports = new AttendanceService();

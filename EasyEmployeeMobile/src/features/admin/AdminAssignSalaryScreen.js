@@ -5,6 +5,7 @@ import {
   assignAdminSalary,
   getAdminAllUsers,
   getSalaryTaxRules,
+  updateAdminSalary,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
@@ -51,7 +52,32 @@ const fallbackTaxRules = [
   {label: 'Above 24,00,000', fromAmount: 2400000, toAmount: null, ratePercent: 30},
 ];
 
-export const AdminAssignSalaryScreen = ({navigation}) => {
+const salaryToForm = salary => {
+  const earnings = salary?.earnings || {};
+  const deductions = salary?.deductions || {};
+  return {
+    basic: String(earnings.basic ?? ''),
+    hra: String(earnings.hra ?? ''),
+    conveyance: String(earnings.conveyance ?? ''),
+    medical: String(earnings.medical ?? ''),
+    specialAllowance: String(earnings.specialAllowance ?? ''),
+    bonus: String(earnings.bonus ?? ''),
+    overtimeHours: String(earnings.overtimeHours ?? ''),
+    overtimeRate: String(earnings.overtimeRate ?? ''),
+    otherBenefits: String(earnings.otherBenefits ?? ''),
+    pfEmployeePercent: String(deductions.pfEmployeePercent ?? '12'),
+    pfEmployerPercent: String(deductions.pfEmployerPercent ?? '12'),
+    esiEmployeePercent: String(deductions.esiEmployeePercent ?? '0'),
+    esiEmployerPercent: String(deductions.esiEmployerPercent ?? '0'),
+    professionalTax: String(deductions.professionalTax ?? '0'),
+    loanRecovery: String(deductions.loanRecovery ?? '0'),
+    tdsMonthlyOverride: '',
+  };
+};
+
+const idOf = item => String(item?.id || item?._id || item || '');
+
+export const AdminAssignSalaryScreen = ({navigation, route}) => {
   const [employees, setEmployees] = useState([]);
   const [employeeID, setEmployeeID] = useState('');
   const [form, setForm] = useState(emptySalary);
@@ -59,6 +85,7 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
   const [taxRules, setTaxRules] = useState(fallbackTaxRules);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
+  const editingSalary = route?.params?.salary || null;
 
   const loadTaxRules = async () => {
     const response = await getSalaryTaxRules();
@@ -79,6 +106,17 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
     });
     return unsubscribe;
   }, [navigation]);
+
+  useEffect(() => {
+    const routeEmployee = route?.params?.employee;
+    if (!routeEmployee && !editingSalary) return;
+    const employeeId = idOf(routeEmployee || editingSalary?.employeeID);
+    if (employeeId) setEmployeeID(employeeId);
+    if (routeEmployee?.name || routeEmployee?.email || routeEmployee?.username) {
+      setSearch(`${routeEmployee.name || routeEmployee.username || ''}`);
+    }
+    if (editingSalary) setForm(salaryToForm(editingSalary));
+  }, [editingSalary, route?.params?.employee]);
 
   const calculateAnnualTax = (annualGross, rules) => {
     const taxableIncome = Math.max(annualGross - STANDARD_DEDUCTION, 0);
@@ -148,7 +186,7 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
     setLoading(true);
     setToast('');
     try {
-      const response = await assignAdminSalary({
+      const payload = {
         employeeID,
         earnings: {
           basic: numeric(form.basic),
@@ -178,11 +216,13 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
           totalDeductions: totals.deductions,
         },
         netPay: totals.net,
-      });
-      Alert.alert('Salary', response?.message || 'Salary assigned.');
+      };
+      const response = editingSalary ? await updateAdminSalary(payload) : await assignAdminSalary(payload);
+      Alert.alert('Salary', response?.message || (editingSalary ? 'Salary updated.' : 'Salary assigned.'));
       setForm(emptySalary);
+      navigation.setParams?.({employee: undefined, salary: undefined});
     } catch (err) {
-      setToast(err.message || 'Salary could not be assigned.');
+      setToast(err.message || 'Salary could not be saved.');
     } finally {
       setLoading(false);
     }
@@ -192,7 +232,7 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
     <Screen>
       <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
-        <Text style={styles.title}>Assign Salary Structure</Text>
+        <Text style={styles.title}>{editingSalary ? 'Edit Salary Structure' : 'Assign Salary Structure'}</Text>
         <View style={styles.actions}>
           <AppButton icon={FileText} title="TDS Rules" variant="muted" onPress={() => navigation.navigate('AdminTdsRules')} />
         </View>
@@ -267,7 +307,7 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
           <Text style={styles.net}>Net Salary: {formatCurrency(totals.net)}</Text>
           <Text style={styles.summaryText}>Yearly Net: {formatCurrency(totals.net * 12)}</Text>
         </View>
-        <AppButton loading={loading} onPress={submit} title="Assign Salary" />
+        <AppButton loading={loading} onPress={submit} title={editingSalary ? 'Update Salary' : 'Assign Salary'} />
       </Card>
     </Screen>
   );
