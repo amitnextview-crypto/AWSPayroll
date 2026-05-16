@@ -31,16 +31,22 @@ export const updateExpense = (id, data) => client.patch(`/employee/expenses/${id
 export const deleteExpense = id => client.delete(`/employee/expenses/${id}`);
 
 export const getAdminCounts = () => client.get('/admin/counts');
-export const getAdminEmployees = () => client.get('/admin/employees');
-export const getAdminAdmins = () => client.get('/admin/admins');
-export const getAdminLeaders = () => client.get('/admin/leaders');
+export const getAdminDashboard = () => client.get('/admin/dashboard');
+export const getAdminEmployees = params => client.get('/admin/employees', {params});
+export const getAdminAdmins = params => client.get('/admin/admins', {params});
+export const getAdminLeaders = params => client.get('/admin/leaders', {params});
 export const getAdminTeams = () => client.get('/admin/teams');
-export const getAdminAllUsers = () => client.get('/admin/all-users');
+export const getAdminAllUsers = params => client.get('/admin/all-users', {params});
+export const updateAdminUser = (id, data) => client.patch(`/admin/user/${id}`, data);
 export const getAdminTeamMembers = id => client.get(`/admin/team/${id}/members`);
 export const addAdminUser = data => client.post('/admin/user', data);
 export const addAdminTeam = data => client.post('/admin/team', data);
 export const deleteAdminUser = id => client.delete(`/admin/user/${id}`);
 export const deleteAdminTeam = id => client.delete(`/admin/team/${id}`);
+export const addAdminTeamMember = data => client.patch('/admin/team/member/add', data);
+export const removeAdminTeamMember = data => client.patch('/admin/team/member/remove', data);
+export const changeAdminTeamLeader = data => client.patch('/admin/team/leader/add', data);
+export const removeAdminTeamLeader = data => client.patch('/admin/team/leader/remove', data);
 export const getAdminAttendance = data =>
   client.post('/admin/view-employee-attendance', data);
 export const updateAdminAttendance = data =>
@@ -63,5 +69,7 @@ export const calculateCurrentMonthSalaries = () =>
   client.get('/admin/calculate-current-month-salaries');
 export const sendAdminPayslip = data => client.post('/admin/payslip/send-email', data);
 export const getPayrollPolicies = () => client.get('/admin/payroll-policies');
+export const addPayrollPolicy = data => client.post('/admin/payroll-policies', data);
 export const updatePayrollPolicy = (id, data) =>
   client.patch(`/admin/payroll-policies/${id}`, data);
+export const deletePayrollPolicy = id => client.delete(`/admin/payroll-policies/${id}`);

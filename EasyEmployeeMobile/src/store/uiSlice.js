@@ -9,8 +9,11 @@ const uiSlice = createSlice({
     toggleTheme(state) {
       state.themeMode = state.themeMode === 'dark' ? 'light' : 'dark';
     },
+    setTheme(state, action) {
+      state.themeMode = action.payload === 'dark' ? 'dark' : 'light';
+    },
   },
 });
 
-export const {toggleTheme} = uiSlice.actions;
+export const {setTheme, toggleTheme} = uiSlice.actions;
 export default uiSlice.reducer;

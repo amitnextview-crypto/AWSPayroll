@@ -1,33 +1,48 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Alert, StyleSheet, Text} from 'react-native';
-import {addAdminTeam} from '../../api/employeeApi';
+import {addAdminTeam, getAdminEmployees} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
+import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
 export const AdminAddTeamScreen = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [leader, setLeader] = useState('');
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    getAdminEmployees({limit: 100})
+      .then(response => setEmployees(response?.data || []))
+      .catch(err => setToast(err.message || 'Employees could not be loaded.'));
+  }, []);
 
   const submit = async () => {
-    if (!name) {
-      setError('Team name is required.');
+    if (!name.trim()) {
+      setToast('Team name is required.');
+      return;
+    }
+    if (!leader) {
+      setToast('Select one employee as team leader.');
       return;
     }
     setLoading(true);
-    setError('');
+    setToast('');
     try {
-      const response = await addAdminTeam({name, description});
+      const response = await addAdminTeam({name: name.trim(), description: description.trim(), leader});
       Alert.alert('Team', response?.message || 'Team created.');
       setName('');
       setDescription('');
+      setLeader('');
     } catch (err) {
-      setError(err.message || 'Team could not be created.');
+      setToast(err.message || 'Team could not be created.');
     } finally {
       setLoading(false);
     }
@@ -35,12 +50,22 @@ export const AdminAddTeamScreen = () => {
 
   return (
     <Screen>
+      <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
-        <Text style={styles.title}>Add Team</Text>
+        <Text style={styles.title}>Create Team</Text>
         <AppTextInput label="Team name" value={name} onChangeText={setName} />
-        <AppTextInput label="Description" value={description} onChangeText={setDescription} />
+        <AppTextInput label="Description" value={description} onChangeText={setDescription} multiline />
+        <Text style={styles.label}>Team Leader</Text>
+        <FilterChips
+          value={leader}
+          onChange={setLeader}
+          items={employees.map(employee => ({
+            value: employee.id || employee._id,
+            label: `${employee.name || employee.username} (${employee.department || 'Team'})`,
+          }))}
+        />
+        <Text style={styles.hint}>Selected employee is automatically promoted into the Leaders tab.</Text>
         <AppButton loading={loading} onPress={submit} title="Create Team" />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
     </Screen>
   );
@@ -48,5 +73,6 @@ export const AdminAddTeamScreen = () => {
 
 const styles = StyleSheet.create({
   title: {color: colors.text, fontSize: 20, fontWeight: '900', marginBottom: spacing.md},
-  error: {color: colors.danger, marginTop: spacing.sm},
+  label: {color: colors.text, fontSize: 13, fontWeight: '800'},
+  hint: {color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm, marginTop: spacing.xs},
 });

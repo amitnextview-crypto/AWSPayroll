@@ -31,7 +31,7 @@ const dispatch = useDispatch();
         <li><NavLink className="nav-link" to="/monthlysalaries"><i class="fas fa-piggy-bank"></i> <span>Monthly Salaries</span></NavLink></li>
 
         <li className="menu-header">Starter</li>
-        <li><NavLink className="nav-link" to="/adduser"><i className="fas fa-user-plus"></i> <span>Add User</span></NavLink></li>
+        <li><NavLink className="nav-link" to="/adduser"><i className="fas fa-user-plus"></i> <span>Add Employee</span></NavLink></li>
         <li><NavLink className="nav-link" to="/addteam"><i className="fas fa-address-card"></i> <span>Add Team</span></NavLink></li>
         <li><NavLink className="nav-link" to="/home"><i className="far fa-square"></i> <span>Blank Page</span></NavLink></li>
 

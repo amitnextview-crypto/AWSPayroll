@@ -62,10 +62,12 @@ const userSchema = new Schema({
         type: String,
         trim: true,
         default: 'No Address Specified',
-        maxlength: 100
+        maxlength: 300
     },
 
     // 🆕 Additional Info
+    employeeCode: { type: String, trim: true, default: '' },
+    department: { type: String, trim: true, default: '' },
     designation: {
         type: String,
         trim: true,
@@ -84,7 +86,7 @@ const userSchema = new Schema({
     workType: {
         type: String,
         enum: ['Onsite', 'Remote', 'Hybrid'],
-        default: 'Full Time',
+        default: 'Onsite',
         trim: true
     },
     uan: {
@@ -96,6 +98,24 @@ const userSchema = new Schema({
         type: String,
         trim: true,
         default: ''
+    },
+    emergencyContact: {
+        name: { type: String, trim: true, default: '' },
+        phone: { type: String, trim: true, default: '' },
+        relation: { type: String, trim: true, default: '' }
+    },
+    documents: [{
+        name: { type: String, trim: true },
+        file: { type: String, trim: true },
+        uploadedAt: { type: Date, default: Date.now }
+    }],
+    notificationSettings: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: false },
+        push: { type: Boolean, default: true }
+    },
+    securitySettings: {
+        twoFactorEnabled: { type: Boolean, default: false }
     },
 }, { timestamps: true });
 

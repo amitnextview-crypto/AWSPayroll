@@ -19,7 +19,9 @@ export const dLogout = () => api.get('/auth/logout');
 
 // Payroll Policies
 export const getPayrollPolicies = () => api.get('/admin/payroll-policies');
+export const addPayrollPolicy = data => api.post('/admin/payroll-policies', data);
 export const updatePayrollPolicy = (id, data) => api.patch(`/admin/payroll-policies/${id}`, data);
+export const deletePayrollPolicy = id => api.delete(`/admin/payroll-policies/${id}`);
 
 
 

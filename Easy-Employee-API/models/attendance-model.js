@@ -12,6 +12,12 @@ const AttendanceSchema = new Schema({
   attendanceOut: { type: String },
   late: { type: String },
   totalHours: { type: String },
+  status: {
+    type: String,
+    enum: ['Present', 'Absent', 'Half Day', 'Leave', 'Approved Leave'],
+    default: 'Absent'
+  },
+  correctionReason: { type: String, trim: true },
   checkInLocation: {
     latitude: { type: Number },
     longitude: { type: Number },

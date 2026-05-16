@@ -6,7 +6,7 @@ const bcrypt = require('bcrypt');
 class UserService {
   createUser = async (user) => await UserModel.create(user);
 
-  deleteUser = async (_id, user) => await UserModel.deleteOne({ _id }, user);
+  deleteUser = async (filter) => await UserModel.deleteOne(filter);
 
   updateUser = async (_id, user) => await UserModel.updateOne({ _id }, user);
 

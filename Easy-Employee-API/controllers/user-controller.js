@@ -4,6 +4,7 @@ const Leave = require("../models/leave-model");
 const Expense = require("../models/expense-model");
 const PayrollPolicy = require("../models/payroll-policy-model");
 const UserSalaries = require("../models/user-salary");
+const Team = require("../models/team-model");
 const ErrorHandler = require('../utils/error-handler');
 const userService = require('../services/user-service');
 const UserDto = require('../dtos/user-dto');
@@ -11,6 +12,104 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const teamService = require('../services/team-service');
 const attendanceService = require('../services/attendance-service');
+
+const toNumber = value => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const getDateParts = (date = new Date()) => ({
+  year: date.getFullYear(),
+  month: date.getMonth() + 1,
+  date: date.getDate(),
+});
+
+const buildUserQuery = (query = {}, forcedType) => {
+  const filter = {};
+  if (forcedType) filter.type = forcedType;
+  if (query.status) filter.status = String(query.status).toLowerCase();
+  if (query.department) filter.department = new RegExp(String(query.department).trim(), 'i');
+  if (query.designation) filter.designation = new RegExp(String(query.designation).trim(), 'i');
+  if (query.joiningFrom || query.joiningTo) {
+    filter.date = {};
+    if (query.joiningFrom) filter.date.$gte = query.joiningFrom;
+    if (query.joiningTo) filter.date.$lte = query.joiningTo;
+  }
+  if (query.search) {
+    const search = new RegExp(String(query.search).trim(), 'i');
+    filter.$or = [
+      { name: search },
+      { username: search },
+      { email: search },
+      { mobile: search },
+      { employeeCode: search },
+      { department: search },
+      { designation: search },
+    ];
+  }
+  return filter;
+};
+
+const normalizeSalaryPayload = data => {
+  const earnings = {
+    basic: toNumber(data.basic ?? data.earnings?.basic),
+    hra: toNumber(data.hra ?? data.earnings?.hra),
+    specialAllowance: toNumber(data.specialAllowance ?? data.allowance ?? data.earnings?.specialAllowance),
+    bonus: toNumber(data.bonus ?? data.earnings?.bonus),
+    otherBenefits: toNumber(data.incentives ?? data.otherBenefits ?? data.earnings?.otherBenefits),
+    conveyance: toNumber(data.conveyance ?? data.earnings?.conveyance),
+    medical: toNumber(data.medical ?? data.earnings?.medical),
+    overtimeHours: toNumber(data.overtimeHours ?? data.earnings?.overtimeHours),
+    overtimeRate: toNumber(data.overtimeRate ?? data.earnings?.overtimeRate),
+  };
+  earnings.overtimePay = toNumber(data.overtimePay ?? data.earnings?.overtimePay) || earnings.overtimeHours * earnings.overtimeRate;
+  earnings.gross =
+    toNumber(data.gross ?? data.earnings?.gross) ||
+    (earnings.basic +
+      earnings.hra +
+      earnings.specialAllowance +
+      earnings.bonus +
+      earnings.otherBenefits +
+      earnings.conveyance +
+      earnings.medical +
+      earnings.overtimePay);
+
+  const deductions = {
+    pfEmployeePercent: toNumber(data.pfEmployeePercent ?? data.deductions?.pfEmployeePercent ?? 12),
+    pfEmployerPercent: toNumber(data.pfEmployerPercent ?? data.deductions?.pfEmployerPercent ?? 12),
+    esiEmployeePercent: toNumber(data.esiEmployeePercent ?? data.deductions?.esiEmployeePercent),
+    esiEmployerPercent: toNumber(data.esiEmployerPercent ?? data.deductions?.esiEmployerPercent),
+    pfEmployee: toNumber(data.pf ?? data.pfEmployee ?? data.deductions?.pfEmployee),
+    pfEmployer: toNumber(data.pfEmployer ?? data.deductions?.pfEmployer),
+    esiEmployee: toNumber(data.esic ?? data.esiEmployee ?? data.deductions?.esiEmployee),
+    esiEmployer: toNumber(data.esiEmployer ?? data.deductions?.esiEmployer),
+    tdsMonthly: toNumber(data.tax ?? data.tdsMonthly ?? data.deductions?.tdsMonthly),
+    professionalTax: toNumber(data.professionalTax ?? data.deductions?.professionalTax),
+    loanRecovery: toNumber(data.loanRecovery ?? data.deductions?.loanRecovery),
+  };
+  if (!deductions.pfEmployee) deductions.pfEmployee = (earnings.basic * deductions.pfEmployeePercent) / 100;
+  if (!deductions.pfEmployer) deductions.pfEmployer = (earnings.basic * deductions.pfEmployerPercent) / 100;
+  if (!deductions.esiEmployee) deductions.esiEmployee = (earnings.gross * deductions.esiEmployeePercent) / 100;
+  if (!deductions.esiEmployer) deductions.esiEmployer = (earnings.gross * deductions.esiEmployerPercent) / 100;
+  deductions.totalDeductions =
+    toNumber(data.totalDeductions ?? data.deductions?.totalDeductions) ||
+    (deductions.pfEmployee +
+      deductions.esiEmployee +
+      deductions.tdsMonthly +
+      deductions.professionalTax +
+      deductions.loanRecovery +
+      toNumber(data.deductionsAmount));
+
+  return {
+    employeeID: data.employeeID,
+    earnings,
+    deductions,
+    netPay: toNumber(data.netPay) || Math.max(earnings.gross - deductions.totalDeductions, 0),
+    month: data.month,
+    year: data.year,
+    meta: data.meta || {},
+  };
+};
 
 const OFFICE_LOCATION = {
   latitude: Number(process.env.OFFICE_LATITUDE || 23.0361925),
@@ -209,6 +308,8 @@ createUser = async (req, res) => {
         password,
         type,
         address,
+        employeeCode,
+        department,
         designation,
         date,
         panNumber,
@@ -219,6 +320,9 @@ createUser = async (req, res) => {
         workType,   // ✅ added
         uan,        // ✅ added
         esi,        // ✅ added
+        emergencyContactName,
+        emergencyContactPhone,
+        emergencyContactRelation,
       } = req.body;
 
       const finalUsername =
@@ -240,6 +344,8 @@ createUser = async (req, res) => {
         password,
         type,
         address,
+        employeeCode,
+        department,
         designation,
         date,
         panNumber,
@@ -250,6 +356,11 @@ createUser = async (req, res) => {
         workType,   // ✅ added
         uan,        // ✅ added
         esi,        // ✅ added
+        emergencyContact: {
+          name: emergencyContactName || "",
+          phone: emergencyContactPhone || "",
+          relation: emergencyContactRelation || "",
+        },
         profile: req.file ? req.file.filename : "user.png",
       };
 
@@ -285,6 +396,8 @@ createUser = async (req, res) => {
         type,
         status,
         address,
+        employeeCode,
+        department,
         designation,
         date,
         panNumber,
@@ -295,6 +408,9 @@ createUser = async (req, res) => {
         workType,   // ✅ added
         uan,        // ✅ added
         esi,        // ✅ added
+        emergencyContactName,
+        emergencyContactPhone,
+        emergencyContactRelation,
       } = req.body;
 
       if (!mongoose.Types.ObjectId.isValid(id))
@@ -307,10 +423,11 @@ createUser = async (req, res) => {
         name: name || dbUser.name,
         email: email || dbUser.email,
         mobile: mobile || dbUser.mobile,
-        password: password || dbUser.password,
         type: type || dbUser.type,
         status: status || dbUser.status,
         address: address || dbUser.address,
+        employeeCode: employeeCode || dbUser.employeeCode,
+        department: department || dbUser.department,
         designation: designation || dbUser.designation,
         date: date || dbUser.date,
         panNumber: panNumber || dbUser.panNumber,
@@ -321,8 +438,14 @@ createUser = async (req, res) => {
         workType: workType || dbUser.workType,   // ✅ added
         uan: uan || dbUser.uan,                  // ✅ added
         esi: esi || dbUser.esi,                  // ✅ added
+        emergencyContact: {
+          name: emergencyContactName || dbUser.emergencyContact?.name || "",
+          phone: emergencyContactPhone || dbUser.emergencyContact?.phone || "",
+          relation: emergencyContactRelation || dbUser.emergencyContact?.relation || "",
+        },
         profile: file ? file.filename : dbUser.profile,
       };
+      if (password) userData.password = password;
 
       const updatedUser = await userService.updateUser(id, userData);
       if (!updatedUser)
@@ -345,14 +468,31 @@ createUser = async (req, res) => {
 
   getUsers = async (req, res, next) => {
     const type = req.path.split('/').pop().replace('s', '');
-    const emps = await userService.findUsers({ type });
-    if (!emps || emps.length < 1)
-      return next(ErrorHandler.notFound(`No ${type.charAt(0).toUpperCase() + type.slice(1).replace(' ', '')} Found`));
+    const page = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '25', 10), 1), 100);
+    const skip = (page - 1) * limit;
+    const filter = buildUserQuery(req.query, type);
+
+    const [emps, total] = await Promise.all([
+      User.find(filter)
+        .populate('team')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      User.countDocuments(filter),
+    ]);
+
     const employees = emps.map((o) => new UserDto(o));
     res.json({
       success: true,
       message: `${type.charAt(0).toUpperCase() + type.slice(1).replace(' ', '')} List Found`,
       data: employees,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit) || 1,
+      },
     });
   };
 
@@ -400,7 +540,8 @@ createUser = async (req, res) => {
 
     getLeaders = async (req,res,next) =>
     {
-        const leaders = await userService.findLeaders();
+        const filter = buildUserQuery(req.query, 'leader');
+        const leaders = await User.find(filter).populate('team').sort({ createdAt: -1 });
         const data = leaders.map((o)=>new UserDto(o));
         res.json({success:true,message:'Leaders Found',data})
     }
@@ -412,6 +553,103 @@ createUser = async (req, res) => {
         res.json({success:true,message:'Free Leaders Found',data})
     }
 
+    getAdminDashboard = async (req, res) => {
+      const today = getDateParts();
+      const currentMonth = today.month;
+      const currentYear = today.year;
+      const todayIso = new Date().toISOString().split('T')[0];
+
+      const [
+        totalEmployees,
+        activeEmployees,
+        totalTeams,
+        totalLeaders,
+        pendingLeaveRequests,
+        todayAttendance,
+        leaveToday,
+        salarySummary,
+        recentLeaves,
+        recentUsers,
+      ] = await Promise.all([
+        User.countDocuments({ type: 'employee' }),
+        User.countDocuments({ type: 'employee', status: 'active' }),
+        Team.countDocuments({ status: { $ne: 'deleted' } }),
+        User.countDocuments({ type: 'leader' }),
+        Leave.countDocuments({ adminResponse: 'Pending' }),
+        Attendance.find({ year: today.year, month: today.month, date: today.date }),
+        Leave.countDocuments({
+          adminResponse: 'Approved',
+          startDate: { $lte: todayIso },
+          endDate: { $gte: todayIso },
+        }),
+        UserSalaries.aggregate([
+          {
+            $match: {
+              $or: [
+                { month: String(currentMonth), year: String(currentYear) },
+                { month: currentMonth, year: currentYear },
+                { month: { $exists: false } },
+              ],
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              gross: { $sum: '$earnings.gross' },
+              netPay: { $sum: '$netPay' },
+              deductions: { $sum: '$deductions.totalDeductions' },
+              employees: { $sum: 1 },
+            },
+          },
+        ]),
+        Leave.find({}).sort({ createdAt: -1 }).limit(5),
+        User.find({}).sort({ createdAt: -1 }).limit(5),
+      ]);
+
+      const presentToday = todayAttendance.filter(item => item.present).length;
+      const absentToday = Math.max(activeEmployees - presentToday - leaveToday, 0);
+      const payrollSummary = salarySummary[0] || { gross: 0, netPay: 0, deductions: 0, employees: 0 };
+      const recentActivities = [
+        ...recentLeaves.map(leave => ({
+          type: 'Leave',
+          title: `${leave.applicantName} requested ${leave.type}`,
+          status: leave.adminResponse,
+          date: leave.createdAt || leave.appliedDate,
+        })),
+        ...recentUsers.map(user => ({
+          type: 'User',
+          title: `${user.name} joined as ${user.type}`,
+          status: user.status,
+          date: user.createdAt,
+        })),
+      ]
+        .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+        .slice(0, 8);
+
+      res.json({
+        success: true,
+        data: {
+          totalEmployees,
+          presentToday,
+          absentToday,
+          onLeaveToday: leaveToday,
+          totalTeams,
+          totalLeaders,
+          pendingLeaveRequests,
+          payrollSummary,
+          recentActivities,
+          notifications: [
+            pendingLeaveRequests
+              ? `${pendingLeaveRequests} leave request${pendingLeaveRequests > 1 ? 's' : ''} need review`
+              : 'No pending leave approvals',
+            absentToday
+              ? `${absentToday} employee${absentToday > 1 ? 's are' : ' is'} absent today`
+              : 'All active employees are covered today',
+          ],
+        },
+      });
+    }
+
     markEmployeeAttendance = async (req, res, next) => {
   try {
     const { employeeID } = req.body;
@@ -419,13 +657,14 @@ createUser = async (req, res) => {
     const d = new Date();
     const todayDay = days[d.getDay()];
 
-    const newAttendance = {
+      const newAttendance = {
       employeeID,
       year: d.getFullYear(),
       month: d.getMonth() + 1,
       date: d.getDate(),
       day: todayDay,
       present: true,
+      status: "Present",
     };
 
     const isAttendanceMarked = await attendanceService.findAttendance(newAttendance);
@@ -491,6 +730,7 @@ createUser = async (req, res) => {
       date: d.getDate(),
       day: days[d.getDay()],
       present: true,
+      status: "Present",
       attendanceIn,
       late,
       checkInLocation: attendanceLocationPayload(
@@ -638,6 +878,7 @@ updateEmployeeAttendance = async (req, res, next) => {
         late: "-",
         timeStatus: "-",
         present: false,
+        status: "Absent",
         date,
         month,
         year,
@@ -675,6 +916,7 @@ updateEmployeeAttendance = async (req, res, next) => {
       late: isLate,
       timeStatus,
       present: true,
+      status: timeStatus === "Half Time" ? "Half Day" : "Present",
       date,
       month,
       year,
@@ -734,7 +976,7 @@ autoMarkAttendanceForAll = async () => {
           date
         },
         {
-          $set: {
+      $set: {
             present: true,
             attendanceIn: "-",
             attendanceOut: "-",
@@ -817,6 +1059,10 @@ autoMarkAttendanceForAll = async () => {
 
             const {id} = req.params;
             const body = req.body;
+            if (String(body.adminResponse || '').toLowerCase() === 'rejected' && !String(body.rejectionReason || body.message || '').trim()) {
+                return next(ErrorHandler.badRequest('Rejection reason is required'));
+            }
+            if (body.message && !body.rejectionReason) body.rejectionReason = body.message;
             const isLeaveUpdated = await userService.updateLeaveApplication(id,body);
             if(!isLeaveUpdated) return next(ErrorHandler.serverError('Failed to update leave'));
             res.json({success:true,message:'Leave Updated'});
@@ -829,7 +1075,7 @@ autoMarkAttendanceForAll = async () => {
 
     assignEmployeeSalary = async (req, res, next) => {
         try {
-            const data = req.body;
+            const data = normalizeSalaryPayload(req.body);
             const obj = {
                 "employeeID":data.employeeID
             }
@@ -848,7 +1094,7 @@ autoMarkAttendanceForAll = async () => {
 
    updateEmployeeSalary = async (req, res, next) => {
   try {
-    const body = req.body;
+    const body = normalizeSalaryPayload(req.body);
     const { employeeID } = body;
     const d = new Date();
     body["assignedDate"] = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
@@ -879,7 +1125,7 @@ autoMarkAttendanceForAll = async () => {
     }
     getAllUsers = async (req, res, next) => {
         try {
-            const users = await userService.findUsers({});
+            const users = await User.find(buildUserQuery(req.query, req.query.type)).populate('team').sort({ createdAt: -1 });
             if(!users || users.length<1) return next(ErrorHandler.notFound('No Users Found'));
             res.json({success:true,data:users});
         } catch (error) {

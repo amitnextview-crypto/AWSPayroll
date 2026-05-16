@@ -7,6 +7,7 @@ import Modal from "../../components/modal/Modal";
 const AddUser = () => {
   const [imagePreview, setImagePreview] = useState("/assets/icons/user.png");
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   const initialState = {
     name: "",
@@ -154,12 +155,21 @@ const AddUser = () => {
               <input
                 onChange={inputEvent}
                 value={formData.adminPassword}
-                type="password"
+                type={showAdminPassword ? "text" : "password"}
                 placeholder={`Enter Your Password To Add ${formData.name} As An Admin`}
                 id="adminPassword"
                 name="adminPassword"
                 className="form-control"
               />
+              <div
+                className="input-group-append"
+                onClick={() => setShowAdminPassword(!showAdminPassword)}
+                style={{ cursor: "pointer" }}
+              >
+                <div className="input-group-text">
+                  <i className={`fas ${showAdminPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -178,10 +188,10 @@ const AddUser = () => {
 
       <div className="main-content">
         <section className="section">
-          <HeaderSection title="Add User" />
+          <HeaderSection title="Add Employee" />
           <div className="card">
             <div className="card-body pr-5 pl-5 m-1">
-              <form className="row" onSubmit={onSubmit} id="addUserForm">
+              <form className="row" onSubmit={onSubmit} id="addUserForm" noValidate>
                 {/* Profile Upload */}
                 <div className="form-group col-md-12 text-center">
                   <input
@@ -480,13 +490,13 @@ const AddUser = () => {
                   />
                 </div>
 
-                <div className="form-group text-center col-md-12">
+                <div className="form-group text-center col-md-12 mt-4">
                   <button
                     className="btn btn-primary btn-lg"
                     type="submit"
                     style={{ width: "30vh" }}
                   >
-                    Add {formData.type}
+                    Add Employee
                   </button>
                 </div>
               </form>

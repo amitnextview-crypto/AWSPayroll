@@ -13,6 +13,7 @@ const LeaveSchema = new Schema({
     period: { type: Number, required: true, min: 1, max: 60 },
     reason: { type: String, required: true },
     adminResponse: { type: String, default: 'Pending' }, // default matches controller
-});
+    rejectionReason: { type: String, trim: true, default: '' },
+}, { timestamps: true });
 
 module.exports = mongoose.model('Leave', LeaveSchema);

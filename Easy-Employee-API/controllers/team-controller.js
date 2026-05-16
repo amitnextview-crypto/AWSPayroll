@@ -10,15 +10,26 @@ class TeamController {
     createTeam = async (req,res,next) =>
     {
         const profile = req.file && req.file.filename;
-        const {name,description} =req.body;
+        const {name,description,leader} =req.body;
         if(!name) return next(ErrorHandler.badRequest('Required Parameter Teams Name Is Empty'))
+        if(leader && !mongoose.Types.ObjectId.isValid(leader)) return next(ErrorHandler.badRequest('Invalid Leader Id'));
+        if (leader) {
+            const selectedLeader = await userService.findUser({_id: leader});
+            if (!selectedLeader) return next(ErrorHandler.notFound('Selected leader not found'));
+            const alreadyLeading = await teamService.findTeam({leader});
+            if (alreadyLeading) return next(ErrorHandler.badRequest(`${selectedLeader.name} is already leading ${alreadyLeading.name}`));
+        }
         const team = {
             name,
             description,
-            profile
+            profile,
+            leader
         }
         const teamResp = await teamService.createTeam(team);
         if(!teamResp) return next(ErrorHandler.serverError('Failed To Create The Team'));
+        if (leader) {
+            await userService.updateUser(leader, { type: 'leader', team: teamResp._id });
+        }
         res.json({success:true,message:'Team Has Been Created',team:new TeamDto(teamResp)});
     }
 
@@ -98,12 +109,15 @@ class TeamController {
         if(!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid Leader Id'));
         const user = await userService.findUser({_id:id});
         if(!user) return next(ErrorHandler.notFound('No Leader Found'));
-        if(user.type!=='leader') return next(ErrorHandler.badRequest(`${user.name} is not a Leader`));
+        if(type==='add' && !['leader', 'employee'].includes(user.type)) return next(ErrorHandler.badRequest(`${user.name} cannot be assigned as a leader`));
+        if(type==='remove' && user.type!=='leader') return next(ErrorHandler.badRequest(`${user.name} is not a Leader`));
         const team = await teamService.findTeam({leader:id});
         console.log(team)
         if(type==='add' && team) return next(ErrorHandler.badRequest(`${user.name} is already leading '${team.name}' team`));
         if(type==='remove' && !team) return next(ErrorHandler.badRequest(`${user.name} is not leading any team`));
         const update = await teamService.updateTeam(teamId,{leader: type==='add' ? id : null});
+        if (type === 'add') await userService.updateUser(id, { type: 'leader', team: teamId });
+        if (type === 'remove') await userService.updateUser(id, { type: 'employee', team: null });
         console.log(type==='add' ? id : null);
         return update.modifiedCount!==1 ? next(ErrorHandler.serverError(`Failed To ${type.charAt(0).toUpperCase() + type.slice(1)} Leader`)) : res.json({success:true,message:`${type==='add'? 'Added' : 'Removed'} Successfully ${user.name} As A Leader`})
     }

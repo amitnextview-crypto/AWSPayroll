@@ -1,74 +1,104 @@
 import React, {useEffect, useState} from 'react';
 import {ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
-import {BriefcaseBusiness, Building2, CalendarCheck, FileCheck, IndianRupee, ReceiptText, ShieldCheck, Users} from 'lucide-react-native';
-import {getAdminCounts} from '../../api/employeeApi';
+import {
+  Bell,
+  BriefcaseBusiness,
+  Building2,
+  CalendarCheck,
+  FileCheck,
+  IndianRupee,
+  ReceiptText,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from 'lucide-react-native';
+import {getAdminDashboard} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
 import {Screen} from '../../components/Screen';
+import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
+import {formatCurrency} from '../../utils/money';
 
 export const AdminHomeScreen = ({navigation}) => {
   const {user} = useSelector(state => state.auth);
-  const [counts, setCounts] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
 
-  const loadCounts = async () => {
+  const loadDashboard = async () => {
     setLoading(true);
-    setError('');
+    setToast('');
     try {
-      const response = await getAdminCounts();
-      if (response?.success) {
-        setCounts(response.data);
-      } else {
-        setError(response?.message || 'Dashboard data could not be loaded.');
-      }
+      const response = await getAdminDashboard();
+      setDashboard(response?.data || {});
     } catch (err) {
-      setError(err.message || 'Dashboard data could not be loaded.');
+      setToast(err.message || 'Dashboard data could not be loaded.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCounts();
+    loadDashboard();
   }, []);
+
+  const payroll = dashboard?.payrollSummary || {};
 
   return (
     <Screen
       refreshControl={
-        <RefreshControl refreshing={loading} onRefresh={loadCounts} tintColor={colors.primary} />
+        <RefreshControl refreshing={loading} onRefresh={loadDashboard} tintColor={colors.primary} />
       }>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Target Management</Text>
-        <Text style={styles.greeting}>Hi, {user?.name || user?.username}</Text>
-        <Text style={styles.sub}>Dashboard</Text>
+        <Text style={styles.eyebrow}>Admin Payroll Console</Text>
+        <Text style={styles.greeting}>Hi, {user?.name || user?.username || 'Admin'}</Text>
+        <Text style={styles.sub}>Live workforce, attendance, leave, and payroll overview</Text>
       </View>
 
-      {loading && !counts ? (
-        <ActivityIndicator color={colors.primary} size="large" />
-      ) : null}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ToastBanner message={toast} onHide={() => setToast('')} />
+      {loading && !dashboard ? <ActivityIndicator color={colors.primary} size="large" /> : null}
 
       <View style={styles.grid}>
-        <MetricCard icon={Users} label="Total Employee" value={counts?.employee} tone="primary" />
-        <MetricCard icon={BriefcaseBusiness} label="Total Leader" value={counts?.leader} tone="info" />
-        <MetricCard icon={ShieldCheck} label="Total Admin" value={counts?.admin} tone="warning" />
-        <MetricCard icon={Building2} label="Total Team" value={counts?.team} tone="success" />
+        <MetricCard icon={Users} label="Total Employees" value={dashboard?.totalEmployees || 0} tone="primary" />
+        <MetricCard icon={CalendarCheck} label="Present Today" value={dashboard?.presentToday || 0} tone="success" />
+        <MetricCard icon={BriefcaseBusiness} label="Absent Today" value={dashboard?.absentToday || 0} tone="warning" />
+        <MetricCard icon={FileCheck} label="On Leave Today" value={dashboard?.onLeaveToday || 0} tone="info" />
+        <MetricCard icon={Building2} label="Total Teams" value={dashboard?.totalTeams || 0} tone="success" />
+        <MetricCard icon={ShieldCheck} label="Total Leaders" value={dashboard?.totalLeaders || 0} tone="info" />
+        <MetricCard icon={Bell} label="Pending Leaves" value={dashboard?.pendingLeaveRequests || 0} tone="warning" />
+        <MetricCard icon={IndianRupee} label="Payroll Net" value={formatCurrency(payroll.netPay || 0)} tone="primary" />
       </View>
 
       <Card>
-        <Text style={styles.cardTitle}>Priority Actions</Text>
+        <Text style={styles.cardTitle}>This Month Payroll</Text>
+        <View style={styles.payrollRow}>
+          <Text style={styles.meta}>Employees covered</Text>
+          <Text style={styles.value}>{payroll.employees || 0}</Text>
+        </View>
+        <View style={styles.payrollRow}>
+          <Text style={styles.meta}>Gross salary</Text>
+          <Text style={styles.value}>{formatCurrency(payroll.gross || 0)}</Text>
+        </View>
+        <View style={styles.payrollRow}>
+          <Text style={styles.meta}>Deductions</Text>
+          <Text style={styles.value}>{formatCurrency(payroll.deductions || 0)}</Text>
+        </View>
+      </Card>
+
+      <Card>
+        <Text style={styles.cardTitle}>Quick Actions</Text>
         <View style={styles.actions}>
           {[
+            ['Add User', UserPlus, 'AdminAddUser'],
             ['Employees', Users, 'AdminPeople'],
+            ['Teams', Building2, 'AdminTeams'],
             ['Attendance', CalendarCheck, 'AdminAttendance'],
             ['Leaves', FileCheck, 'AdminLeaves'],
-            ['Expenses', ReceiptText, 'AdminExpenses'],
             ['Salaries', IndianRupee, 'AdminSalaries'],
+            ['Expenses', ReceiptText, 'AdminExpenses'],
             ['Policies', ShieldCheck, 'AdminPolicies'],
           ].map(([label, Icon, route]) => (
             <Pressable key={label} onPress={() => navigation.navigate(route)} style={styles.action}>
@@ -77,6 +107,24 @@ export const AdminHomeScreen = ({navigation}) => {
             </Pressable>
           ))}
         </View>
+      </Card>
+
+      <Card>
+        <Text style={styles.cardTitle}>Notifications</Text>
+        {(dashboard?.notifications || []).map(item => (
+          <Text key={item} style={styles.meta}>- {item}</Text>
+        ))}
+      </Card>
+
+      <Card>
+        <Text style={styles.cardTitle}>Recent Activities</Text>
+        {(dashboard?.recentActivities || []).map((item, index) => (
+          <View key={`${item.title}-${index}`} style={styles.activity}>
+            <Text style={styles.activityTitle}>{item.title}</Text>
+            <Text style={styles.meta}>{item.type} - {item.status || '-'}</Text>
+          </View>
+        ))}
+        {!dashboard?.recentActivities?.length ? <Text style={styles.meta}>No recent activity yet.</Text> : null}
       </Card>
     </Screen>
   );
@@ -102,6 +150,7 @@ const styles = StyleSheet.create({
   },
   sub: {
     color: '#dbeafe',
+    lineHeight: 22,
     marginTop: spacing.xs,
   },
   grid: {
@@ -119,9 +168,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
   },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
+  value: {
+    color: colors.text,
+    fontWeight: '900',
+  },
+  payrollRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
   },
   actions: {
     flexDirection: 'row',
@@ -135,8 +189,8 @@ const styles = StyleSheet.create({
     flexBasis: '31%',
     flexGrow: 1,
     gap: spacing.xs,
-    minHeight: 72,
     justifyContent: 'center',
+    minHeight: 72,
     padding: spacing.sm,
   },
   actionText: {
@@ -144,5 +198,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  activity: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    paddingVertical: spacing.sm,
+  },
+  activityTitle: {
+    color: colors.text,
+    fontWeight: '800',
   },
 });

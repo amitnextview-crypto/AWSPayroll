@@ -12,6 +12,7 @@ const ResetPassword = () =>
         otp:'',
         password:''
     });
+    const [showPassword, setShowPassword] = useState(false);
 
     const history = useHistory();
 
@@ -68,8 +69,15 @@ const ResetPassword = () =>
                         </div>
 
                         <div className="form-group">
-                            <label for="password">New Password</label>
-                            <input id="password" onChange={inputEvent} value={formData.password} type="password" className="form-control" name="password" tabIndex="2" required/>
+                            <label htmlFor="password">New Password</label>
+                            <div className="input-group">
+                                <input id="password" onChange={inputEvent} value={formData.password} type={showPassword ? "text" : "password"} className="form-control" name="password" tabIndex="2" required/>
+                                <div className="input-group-append" onClick={() => setShowPassword(!showPassword)} style={{ cursor: "pointer" }}>
+                                    <div className="input-group-text">
+                                        <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="form-group">

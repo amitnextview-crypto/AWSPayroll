@@ -34,6 +34,7 @@ const EditUser = () => {
   const [userType, setUserType] = useState("User");
   const [showModal, setShowModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const { id } = useParams();
 
   // 🧠 Fetch user data when component loads
@@ -158,12 +159,21 @@ const EditUser = () => {
               <input
                 onChange={inputEvent}
                 value={formData.adminPassword}
-                type="password"
+                type={showAdminPassword ? "text" : "password"}
                 placeholder={`Enter Your Password To Change ${formData.name}'s Type`}
                 id="adminPassword"
                 name="adminPassword"
                 className="form-control"
               />
+              <div
+                className="input-group-append"
+                onClick={() => setShowAdminPassword(!showAdminPassword)}
+                style={{ cursor: "pointer" }}
+              >
+                <div className="input-group-text">
+                  <i className={`fas ${showAdminPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                </div>
+              </div>
             </div>
           </div>
 

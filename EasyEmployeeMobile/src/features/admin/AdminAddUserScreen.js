@@ -1,45 +1,89 @@
-import React, {useState} from 'react';
-import {Alert, StyleSheet, Text} from 'react-native';
+import React, {useMemo, useState} from 'react';
+import {Alert, StyleSheet, Text, View} from 'react-native';
 import {addAdminUser} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
+import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {formatApiDate} from '../../utils/date';
 
+const roleOptions = [
+  {label: 'Employee', value: 'employee'},
+  {label: 'Leader', value: 'leader'},
+  {label: 'Admin', value: 'admin'},
+];
+
+const workOptions = [
+  {label: 'Onsite', value: 'Onsite'},
+  {label: 'Remote', value: 'Remote'},
+  {label: 'Hybrid', value: 'Hybrid'},
+];
+
+const initialForm = {
+  name: '',
+  username: '',
+  employeeCode: '',
+  email: '',
+  mobile: '',
+  password: '',
+  type: 'employee',
+  department: '',
+  designation: '',
+  workType: 'Onsite',
+  date: formatApiDate(),
+  address: '',
+  panNumber: '',
+  aadhaarNumber: '',
+  bankName: '',
+  accountNumber: '',
+  ifscCode: '',
+  uan: '',
+  esi: '',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
+  emergencyContactRelation: '',
+};
+
 export const AdminAddUserScreen = () => {
-  const [form, setForm] = useState({
-    name: '',
-    username: '',
-    email: '',
-    mobile: '',
-    password: '',
-    type: 'employee',
-    status: 'Active',
-    designation: '',
-    workType: 'Onsite',
-    address: '',
-    date: formatApiDate(),
-  });
+  const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
   const set = (key, value) => setForm(current => ({...current, [key]: value}));
 
+  const errors = useMemo(() => {
+    const next = {};
+    if (!form.name.trim()) next.name = 'Full name is required.';
+    if (!form.username.trim()) next.username = 'Employee ID is required.';
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Valid email is required.';
+    if (!/^\d{10,13}$/.test(form.mobile)) next.mobile = 'Valid phone is required.';
+    if (form.password.length < 6) next.password = 'Password must be at least 6 characters.';
+    if (!form.department.trim()) next.department = 'Department is required.';
+    if (!form.designation.trim()) next.designation = 'Designation is required.';
+    if (form.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(form.panNumber.toUpperCase())) next.panNumber = 'PAN format is invalid.';
+    if (form.aadhaarNumber && !/^\d{12}$/.test(form.aadhaarNumber)) next.aadhaarNumber = 'Aadhaar must be 12 digits.';
+    return next;
+  }, [form]);
+
   const submit = async () => {
-    if (!form.name || !form.username || !form.password || !form.type) {
-      setError('Name, username, password and type are required.');
+    setShowErrors(true);
+    if (Object.keys(errors).length) {
+      setToast(Object.values(errors)[0]);
       return;
     }
     setLoading(true);
-    setError('');
+    setToast('');
     try {
-      const response = await addAdminUser(form);
-      Alert.alert('User', response?.message || 'User created.');
-      setForm(current => ({...current, name: '', username: '', email: '', mobile: '', password: ''}));
+      const response = await addAdminUser({...form, panNumber: form.panNumber.toUpperCase()});
+      Alert.alert('Employee', response?.message || 'Employee created.');
+      setForm(initialForm);
+      setShowErrors(false);
     } catch (err) {
-      setError(err.message || 'User could not be created.');
+      setToast(err.message || 'User could not be created.');
     } finally {
       setLoading(false);
     }
@@ -47,19 +91,56 @@ export const AdminAddUserScreen = () => {
 
   return (
     <Screen>
+      <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
-        <Text style={styles.title}>Add User</Text>
-        {['name', 'username', 'email', 'mobile', 'password', 'type', 'designation', 'workType', 'address'].map(key => (
-          <AppTextInput
-            key={key}
-            label={key}
-            secureTextEntry={key === 'password'}
-            value={form[key]}
-            onChangeText={value => set(key, value)}
-          />
-        ))}
-        <AppButton loading={loading} onPress={submit} title="Create User" />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Text style={styles.title}>Add Employee</Text>
+        <Text style={styles.section}>Account</Text>
+        <AppTextInput label="Full Name" error={showErrors ? errors.name : undefined} value={form.name} onChangeText={value => set('name', value)} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Employee ID" error={showErrors ? errors.username : undefined} value={form.username} onChangeText={value => set('username', value)} style={styles.flex} />
+          <AppTextInput label="Employee Code" value={form.employeeCode} onChangeText={value => set('employeeCode', value)} style={styles.flex} />
+        </View>
+        <AppTextInput label="Email" autoCapitalize="none" keyboardType="email-address" error={showErrors ? errors.email : undefined} value={form.email} onChangeText={value => set('email', value)} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Phone" keyboardType="phone-pad" error={showErrors ? errors.mobile : undefined} value={form.mobile} onChangeText={value => set('mobile', value)} style={styles.flex} />
+          <AppTextInput label="Password" secureTextEntry error={showErrors ? errors.password : undefined} value={form.password} onChangeText={value => set('password', value)} style={styles.flex} />
+        </View>
+        <FilterChips items={roleOptions} value={form.type} onChange={value => set('type', value)} />
+
+        <Text style={styles.section}>Job Details</Text>
+        <View style={styles.twoCol}>
+          <AppTextInput label="Department" error={showErrors ? errors.department : undefined} value={form.department} onChangeText={value => set('department', value)} style={styles.flex} />
+          <AppTextInput label="Designation" error={showErrors ? errors.designation : undefined} value={form.designation} onChangeText={value => set('designation', value)} style={styles.flex} />
+        </View>
+        <AppTextInput label="Joining Date YYYY-MM-DD" value={form.date} onChangeText={value => set('date', value)} />
+        <FilterChips items={workOptions} value={form.workType} onChange={value => set('workType', value)} />
+        <AppTextInput label="Address" multiline value={form.address} onChangeText={value => set('address', value)} />
+
+        <Text style={styles.section}>Bank and Compliance</Text>
+        <View style={styles.twoCol}>
+          <AppTextInput label="PAN" autoCapitalize="characters" error={showErrors ? errors.panNumber : undefined} value={form.panNumber} onChangeText={value => set('panNumber', value)} style={styles.flex} />
+          <AppTextInput label="Aadhaar" keyboardType="numeric" error={showErrors ? errors.aadhaarNumber : undefined} value={form.aadhaarNumber} onChangeText={value => set('aadhaarNumber', value)} style={styles.flex} />
+        </View>
+        <AppTextInput label="Bank Name" value={form.bankName} onChangeText={value => set('bankName', value)} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Account Number" keyboardType="numeric" value={form.accountNumber} onChangeText={value => set('accountNumber', value)} style={styles.flex} />
+          <AppTextInput label="IFSC Code" autoCapitalize="characters" value={form.ifscCode} onChangeText={value => set('ifscCode', value)} style={styles.flex} />
+        </View>
+        <View style={styles.twoCol}>
+          <AppTextInput label="UAN" value={form.uan} onChangeText={value => set('uan', value)} style={styles.flex} />
+          <AppTextInput label="ESI" value={form.esi} onChangeText={value => set('esi', value)} style={styles.flex} />
+        </View>
+
+        <Text style={styles.section}>Emergency Contact</Text>
+        <AppTextInput label="Contact Name" value={form.emergencyContactName} onChangeText={value => set('emergencyContactName', value)} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Contact Phone" keyboardType="phone-pad" value={form.emergencyContactPhone} onChangeText={value => set('emergencyContactPhone', value)} style={styles.flex} />
+          <AppTextInput label="Relation" value={form.emergencyContactRelation} onChangeText={value => set('emergencyContactRelation', value)} style={styles.flex} />
+        </View>
+
+        <View style={styles.submitWrap}>
+          <AppButton loading={loading} onPress={submit} title="Create Employee" />
+        </View>
       </Card>
     </Screen>
   );
@@ -67,5 +148,8 @@ export const AdminAddUserScreen = () => {
 
 const styles = StyleSheet.create({
   title: {color: colors.text, fontSize: 20, fontWeight: '900', marginBottom: spacing.md},
-  error: {color: colors.danger, marginTop: spacing.sm},
+  section: {color: colors.primary, fontSize: 14, fontWeight: '900', marginTop: spacing.lg},
+  twoCol: {flexDirection: 'row', gap: spacing.md},
+  flex: {flex: 1},
+  submitWrap: {marginTop: spacing.md},
 });

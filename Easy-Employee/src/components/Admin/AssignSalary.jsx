@@ -30,6 +30,7 @@ const AssignSalary = () => {
 
   const [formData, setFormData] = useState(initialState);
   const [selectedEmployee, setSelectedEmployee] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [employees, setEmployees] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { user } = useSelector((s) => s.authSlice || {});
@@ -57,6 +58,19 @@ const AssignSalary = () => {
     const parsed = Number(String(v).replace(/,/g, ""));
     return Number.isFinite(parsed) ? parsed : 0;
   };
+
+  const filteredEmployees = useMemo(() => {
+    const term = employeeSearch.trim().toLowerCase();
+    const employeeOnly = employees.filter((emp) => String(emp.type || "").toLowerCase() === "employee");
+    if (!term) return employeeOnly;
+    return employeeOnly.filter((emp) =>
+      `${emp.name || ""} ${emp.email || ""} ${emp.username || ""} ${emp.employeeCode || ""} ${emp._id || emp.id || ""}`
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [employees, employeeSearch]);
+
+  const selectedEmployeeRecord = employees.find((emp) => (emp.id || emp._id) === selectedEmployee);
 
   // ===== Calculations =====
   const overtimePay = useMemo(
@@ -205,6 +219,13 @@ const AssignSalary = () => {
             {/* Employee selection */}
             <div className="row">
               <div className="col-md-6">
+                <label>Search Employee</label>
+                <input
+                  className="form-control mb-2"
+                  placeholder="Search by name, email, employee ID, or database ID"
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                />
                 <label>Select Employee</label>
                 <select
                   className="form-control"
@@ -212,12 +233,17 @@ const AssignSalary = () => {
                   onChange={(e) => setSelectedEmployee(e.target.value)}
                 >
                   <option value="">-- Select employee --</option>
-                  {employees.map((emp) => (
+                  {filteredEmployees.map((emp) => (
                     <option key={emp._id || emp.id} value={emp.id || emp._id}>
-                      {emp.name} ({emp.email})
+                      {emp.name} ({emp.employeeCode || emp.username || emp.email})
                     </option>
                   ))}
                 </select>
+                {selectedEmployeeRecord ? (
+                  <small className="form-text text-muted">
+                    Employee DB ID: {selectedEmployeeRecord._id || selectedEmployeeRecord.id}
+                  </small>
+                ) : null}
               </div>
 
               <div className="col-md-6">

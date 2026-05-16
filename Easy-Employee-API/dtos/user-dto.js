@@ -11,6 +11,8 @@ class UserDto {
     address;
     status;
     team;
+    employeeCode;
+    department;
     designation;
     panNumber;
     aadhaarNumber;
@@ -36,6 +38,8 @@ class UserDto {
             user.status && user.status.charAt(0).toUpperCase() + user.status.slice(1);
         this.team =
             user.team && new TeamDto(Array.isArray(user.team) && user.team.length > 0 ? user.team[0] : user.team);
+        this.employeeCode = user.employeeCode;
+        this.department = user.department;
         this.designation = user.designation;
         this.panNumber = user.panNumber;
         this.aadhaarNumber = user.aadhaarNumber;
@@ -46,6 +50,10 @@ class UserDto {
         this.uan = user.uan;             // ✅ Added
         this.esi = user.esi;             // ✅ Added
         this.date = user.date;
+        this.emergencyContact = user.emergencyContact;
+        this.documents = user.documents || [];
+        this.createdAt = user.createdAt;
+        this.updatedAt = user.updatedAt;
     }
 }
 
