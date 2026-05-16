@@ -1,8 +1,10 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {Edit3, Trash2} from 'lucide-react-native';
+import {Calculator, Download, Edit3, Trash2} from 'lucide-react-native';
 import {
+  calculateCurrentMonthSalaries,
   deleteAdminSalary,
+  exportAdminMonthlySalaries,
   getAdminAllUsers,
   getAdminSalaries,
 } from '../../api/employeeApi';
@@ -14,6 +16,7 @@ import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {formatCurrency} from '../../utils/money';
+import {todayParts} from '../../utils/date';
 
 const idOf = item => String(item?.id || item?._id || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
@@ -25,6 +28,12 @@ const salaryEmployeeId = salary => {
 export const AdminSalaryScreen = ({navigation}) => {
   const [employees, setEmployees] = useState([]);
   const [salaries, setSalaries] = useState([]);
+  const today = useMemo(() => todayParts(), []);
+  const [payrollMonth, setPayrollMonth] = useState(String(today.month));
+  const [payrollYear, setPayrollYear] = useState(String(today.year));
+  const [payrollRows, setPayrollRows] = useState([]);
+  const [payrollCycle, setPayrollCycle] = useState(null);
+  const [selectedPayroll, setSelectedPayroll] = useState(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -46,8 +55,45 @@ export const AdminSalaryScreen = ({navigation}) => {
     }
   };
 
+  const loadPayroll = async () => {
+    setLoading(true);
+    setToast('');
+    try {
+      const response = await calculateCurrentMonthSalaries({
+        month: Number(payrollMonth) || today.month,
+        year: Number(payrollYear) || today.year,
+      });
+      setPayrollRows(response?.data || []);
+      setPayrollCycle(response?.cycle || null);
+      setSelectedPayroll(null);
+    } catch (err) {
+      setToast(err.message || 'Monthly salaries could not be calculated.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportPayroll = async () => {
+    setLoading(true);
+    try {
+      const csv = await exportAdminMonthlySalaries({
+        month: Number(payrollMonth) || today.month,
+        year: Number(payrollYear) || today.year,
+      });
+      setToast(`Past month salary CSV prepared (${String(csv || '').length} characters). API export endpoint is ready for download.`);
+    } catch (err) {
+      setToast(err.message || 'Salary export could not be prepared.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    loadPayroll();
   }, []);
 
   const rows = useMemo(() => {
@@ -72,6 +118,16 @@ export const AdminSalaryScreen = ({navigation}) => {
         .includes(term),
     );
   }, [rows, search]);
+
+  const visiblePayrollRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return payrollRows;
+    return payrollRows.filter(item =>
+      `${item.name || ''} ${item.email || ''} ${item.username || ''} ${item.employeeCode || ''} ${item.employeeID || ''}`
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [payrollRows, search]);
 
   const selectRow = row => {
     navigation.navigate('AdminAssignSalary', {employee: row.employee, salary: row.salary});
@@ -110,8 +166,55 @@ export const AdminSalaryScreen = ({navigation}) => {
       <ToastBanner message={toast} type={toast.includes('success') ? 'success' : 'error'} onHide={() => setToast('')} />
 
       <Card>
-        <Text style={styles.title}>Employee Salaries</Text>
+        <Text style={styles.title}>Monthly Salaries</Text>
         <AppTextInput label="Search by name, email, employee ID, code, or letter" value={search} onChangeText={setSearch} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Month" keyboardType="numeric" value={payrollMonth} onChangeText={value => setPayrollMonth(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+          <AppTextInput label="Year" keyboardType="numeric" value={payrollYear} onChangeText={value => setPayrollYear(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+        </View>
+        <View style={styles.actions}>
+          <AppButton icon={Calculator} title="Calculate" loading={loading} onPress={loadPayroll} />
+          <AppButton icon={Download} title="Export Past Month Salary" variant="muted" loading={loading} onPress={exportPayroll} />
+        </View>
+        {payrollCycle ? (
+          <Text style={styles.count}>Cycle: {payrollCycle.startDate} to {payrollCycle.endDate} / Open days: {payrollCycle.openDaysInMonth}</Text>
+        ) : null}
+        <Text style={styles.count}>{visiblePayrollRows.length} monthly salary records</Text>
+      </Card>
+
+      {visiblePayrollRows.map(item => (
+        <Card key={String(item.employeeID)}>
+          <View style={styles.headingRow}>
+            <View style={styles.flex}>
+              <Text style={styles.name}>{item.name || 'Employee'}</Text>
+              <Text style={styles.meta}>Email: {item.email || '-'}</Text>
+              <Text style={styles.meta}>Employee ID: {item.username || item.employeeCode || String(item.employeeID)}</Text>
+            </View>
+            <Text style={[styles.badge, styles.assigned]}>{formatCurrency(item.totalPay || 0)}</Text>
+          </View>
+          <Text style={styles.meta}>Payable days: {item.payableDays} / Half days: {item.halfDays} / Leave: {item.leaveDays}</Text>
+          <Text style={styles.meta}>Per day: {formatCurrency(item.perDaySalary || 0)} / Salary: {formatCurrency(item.salaryTillDate || 0)} / Expenses: {formatCurrency(item.totalExpenses || 0)}</Text>
+          <View style={styles.actions}>
+            <AppButton title={String(selectedPayroll?.employeeID) === String(item.employeeID) ? 'Hide Details' : 'View Details'} variant="muted" onPress={() => setSelectedPayroll(String(selectedPayroll?.employeeID) === String(item.employeeID) ? null : item)} />
+          </View>
+          {String(selectedPayroll?.employeeID) === String(item.employeeID) ? (
+            <View style={styles.summary}>
+              <Text style={styles.net}>Total Pay: {formatCurrency(item.totalPay || 0)}</Text>
+              <Text style={styles.summaryText}>Assigned Net Salary: {formatCurrency(item.assignedNetPay || 0)}</Text>
+              <Text style={styles.summaryText}>Cycle: {item.cycle?.startDate} to {item.cycle?.endDate}</Text>
+              <Text style={styles.summaryText}>Present: {item.presentDays}, Half: {item.halfDays}, Approved Leave: {item.leaveDays}, Sunday Paid: {item.sundayPaidDays}, Absent: {item.absentDays}</Text>
+              {(item.attendanceDetails || []).map(day => (
+                <Text key={day.date} style={styles.summaryText}>
+                  {day.date} {day.day}: {day.status} / {day.timeStatus} / {day.payableDays} day / {day.reason}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      ))}
+
+      <Card>
+        <Text style={styles.title}>Assigned Salary Structures</Text>
         <Text style={styles.count}>{visibleRows.length} employees</Text>
       </Card>
 

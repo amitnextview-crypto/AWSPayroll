@@ -59,6 +59,7 @@ router.get("/expenses", asyncMiddleware(expenseController.getExpenses));
 router.get("/expenses/:id", asyncMiddleware(expenseController.getExpenseById));
 router.patch("/expenses/:id", asyncMiddleware(expenseController.updateExpense));
 router.get("/calculate-current-month-salaries", asyncMiddleware(userController.calculateCurrentMonthSalaries));
+router.get("/monthly-salaries/export", asyncMiddleware(userController.exportMonthlySalariesCsv));
 router.get('/salary-tax-rules', asyncMiddleware(userController.getSalaryTaxRules));
 router.post('/salary-tax-rules', asyncMiddleware(userController.createSalaryTaxRule));
 router.patch('/salary-tax-rules/:id', asyncMiddleware(userController.updateSalaryTaxRule));

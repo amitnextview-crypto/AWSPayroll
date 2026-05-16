@@ -146,6 +146,7 @@ export const AdminAttendanceScreen = ({route}) => {
         late: record?.late || '-',
         totalHours: record?.totalHours || '-',
         timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : '-'),
+        reason: record?.reason || statusForMissing(leaves, year, month, date),
       });
     }
     const selectedDate = Number(dateFilter || 0);
@@ -276,6 +277,7 @@ export const AdminAttendanceScreen = ({route}) => {
           <Text style={styles.meta}>Late: {row.late}</Text>
           <Text style={styles.meta}>Total Hours: {row.totalHours}</Text>
           <Text style={styles.meta}>Time Status: {row.timeStatus}</Text>
+          <Text style={styles.meta}>Reason: {row.reason || '-'}</Text>
           {editingKey === row.key ? (
             <View style={styles.editBox}>
               <AppTextInput label="Status (Present, Half Day, Leave, Absent)" value={editForm.status} onChangeText={value => setEdit('status', value)} />

@@ -34,6 +34,8 @@ const AttendanceItem = ({item}) => (
       <Text style={styles.meta}>Out: {item.attendanceOut || '-'}</Text>
       <Text style={styles.meta}>Late: {item.late || '-'}</Text>
       <Text style={styles.meta}>Hours: {item.totalHours || '-'}</Text>
+      <Text style={styles.meta}>Status: {item.timeStatus || item.status || '-'}</Text>
+      <Text style={styles.meta}>Reason: {item.reason || '-'}</Text>
     </View>
   </Card>
 );

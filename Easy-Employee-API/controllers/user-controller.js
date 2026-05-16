@@ -51,6 +51,99 @@ const getDateParts = (date = new Date()) => ({
   date: date.getDate(),
 });
 
+const normalizeDateOnly = date => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
+
+const formatIsoDate = date =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
+const dateRange = (start, end) => {
+  const dates = [];
+  const cursor = normalizeDateOnly(start);
+  const last = normalizeDateOnly(end);
+  while (cursor <= last) {
+    dates.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+};
+
+const parseTimeToMinutes = value => {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return null;
+  const match = text.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridian = match[3]?.toUpperCase();
+  if (meridian === 'PM' && hours !== 12) hours += 12;
+  if (meridian === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+const hoursBetweenTimes = (start, end) => {
+  const startMinutes = parseTimeToMinutes(start);
+  const endMinutes = parseTimeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return 0;
+  const diff = endMinutes >= startMinutes ? endMinutes - startMinutes : endMinutes + 24 * 60 - startMinutes;
+  return Number((diff / 60).toFixed(2));
+};
+
+const timeStatusFromHours = (day, totalHours, status = '') => {
+  const dayLower = String(day || '').toLowerCase();
+  const statusLower = String(status || '').toLowerCase();
+  if (statusLower === 'approved leave' || statusLower === 'leave') return 'Full Time';
+  if (dayLower === 'sunday') return 'Holiday';
+  if (dayLower === 'saturday') return totalHours > 0 ? 'Full Time' : '-';
+  return Number(totalHours || 0) >= 7 ? 'Full Time' : 'Half Time';
+};
+
+const attendanceStatusFromTime = (day, totalHours, status = '') => {
+  const timeStatus = timeStatusFromHours(day, totalHours, status);
+  if (timeStatus === 'Half Time') return 'Half Day';
+  if (timeStatus === 'Holiday') return 'Holiday';
+  if (timeStatus === 'Full Time') return status === 'Approved Leave' ? 'Approved Leave' : 'Present';
+  return status || 'Absent';
+};
+
+const getRuleNumber = (rules, labels, fallback) => {
+  const lowerLabels = labels.map(label => label.toLowerCase());
+  const rule = rules.find(item => lowerLabels.includes(String(item.label || '').trim().toLowerCase()));
+  if (!rule) return fallback;
+  const number = Number(String(rule.value || '').match(/\d+(\.\d+)?/)?.[0]);
+  return Number.isFinite(number) ? number : fallback;
+};
+
+const getPayrollCycleSettings = async (year, month) => {
+  const policies = await PayrollPolicy.find({ status: 'active' });
+  const rules = policies.flatMap(policy => policy.rules || []);
+  const monthDays = daysInMonth(year, month);
+  const rawOpenDays = rules.find(rule => /office open days/i.test(rule.label || ''))?.value;
+  const parsedOpenDays = Number(String(rawOpenDays || '').match(/\d+/)?.[0]);
+  const openDaysInMonth = Number.isFinite(parsedOpenDays) ? parsedOpenDays : monthDays;
+  const startDay = Math.min(Math.max(getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1), 1), monthDays);
+  const rawEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
+  const endDay = Math.min(Math.max(rawEndDay, 1), monthDays);
+  const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours'], 7);
+  const sundayAutoPaidAbove = getRuleNumber(rules, ['Sunday Auto Paid When Open Days Above'], 26);
+  const startDate = new Date(year, month - 1, startDay);
+  const endDate = new Date(year, month - 1, endDay);
+  return {
+    openDaysInMonth,
+    startDay,
+    endDay,
+    halfTimeMinimumHours,
+    sundayAutoPaidAbove,
+    startDate: startDate <= endDate ? startDate : new Date(year, month - 1, 1),
+    endDate: startDate <= endDate ? endDate : new Date(year, month, 0),
+  };
+};
+
 const buildUserQuery = (query = {}, forcedType) => {
   const filter = {};
   if (forcedType) filter.type = forcedType;
@@ -313,115 +406,200 @@ class UserController {
   calculateCurrentMonthSalaries = async (req, res) => {
   try {
     const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1;
+    const year = Number(req.query.year || currentDate.getFullYear());
+    const month = Number(req.query.month || currentDate.getMonth() + 1);
+    const today = normalizeDateOnly(currentDate);
+    const cycle = await getPayrollCycleSettings(year, month);
+    const effectiveEndDate = cycle.endDate > today ? today : cycle.endDate;
+    const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
+    const cycleStartIso = formatIsoDate(cycle.startDate);
+    const cycleEndIso = formatIsoDate(effectiveEndDate);
 
-    // Fetch all required collections
-    const [users, salaries, attendances, expenses, policy] = await Promise.all([
-      User.find({}),
+    const [users, salaries, attendances, expenses, approvedLeaves] = await Promise.all([
+      User.find({ type: { $in: ['employee', 'leader'] }, status: { $ne: 'deleted' } }),
       UserSalaries.find({}),
       Attendance.find({ year, month }),
-      Expense.find({}),
-      PayrollPolicy.findOne({})
+      Expense.find({ adminResponse: "Approved" }),
+      Leave.find({
+        adminResponse: 'Approved',
+        startDate: { $lte: cycleEndIso },
+        endDate: { $gte: cycleStartIso },
+      }),
     ]);
 
-    if (!policy) {
-      return res.status(404).json({ success: false, message: "Payroll Policy not found" });
+    const salaryByEmployee = new Map(salaries.map(item => [String(item.employeeID), item]));
+    const attendanceByEmployeeDate = new Map(
+      attendances.map(item => [`${String(item.employeeID)}-${item.date}`, item]),
+    );
+
+    if (cycle.openDaysInMonth > cycle.sundayAutoPaidAbove) {
+      const sundayDates = cycleDates.filter(dateObj => dateObj.getDay() === 0);
+      await Promise.all(users.flatMap(user =>
+        sundayDates.map(async dateObj => {
+          const employeeId = String(user._id);
+          const dayNumber = dateObj.getDate();
+          const key = `${employeeId}-${dayNumber}`;
+          if (attendanceByEmployeeDate.has(key)) return;
+          const saved = await Attendance.findOneAndUpdate(
+            { employeeID: user._id, year, month, date: dayNumber },
+            {
+              $setOnInsert: {
+                employeeID: user._id,
+                year,
+                month,
+                date: dayNumber,
+                day: 'Sunday',
+                present: true,
+                status: 'Present',
+                attendanceIn: 'Weekly Off',
+                attendanceOut: 'Weekly Off',
+                late: 'No',
+                totalHours: '0',
+                timeStatus: 'Full Time',
+                reason: 'Sunday auto paid by salary policy',
+              },
+            },
+            { upsert: true, new: true },
+          );
+          attendanceByEmployeeDate.set(key, saved);
+        })
+      ));
     }
 
-    // Dynamic working days from payroll policy
-    const workingDays = policy.salaryRules?.workingDaysInMonth || 26;
-    const halfDayFraction = policy.halfDayRule?.fraction || 0.5; // 50% default
+    const results = users.map(user => {
+      const employeeId = String(user._id);
+      const empSalary = salaryByEmployee.get(employeeId);
+      const assignedNetPay = toNumber(empSalary?.netPay);
+      const assignedGross = toNumber(empSalary?.earnings?.gross);
+      const perDaySalary = cycle.openDaysInMonth > 0 ? Number((assignedNetPay / cycle.openDaysInMonth).toFixed(2)) : 0;
+      let payableDays = 0;
+      let presentDays = 0;
+      let halfDays = 0;
+      let leaveDays = 0;
+      let sundayPaidDays = 0;
+      let absentDays = 0;
 
-    const results = users.map((user) => {
-      // ===== Salary Assigned =====
-      const empSalary = salaries.find(s => s.employeeID.toString() === user._id.toString());
-      const grossSalary = empSalary?.earnings?.gross || 0;
-      const netPaySalary = empSalary?.netPay || 0;
+      const attendanceDetails = cycleDates.map(dateObj => {
+        const dayNumber = dateObj.getDate();
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+        const dayLower = day.toLowerCase();
+        const isoDate = formatIsoDate(dateObj);
+        const record = attendanceByEmployeeDate.get(`${employeeId}-${dayNumber}`);
+        const leave = approvedLeaves.find(item =>
+          String(item.applicantID) === employeeId &&
+          item.startDate <= isoDate &&
+          item.endDate >= isoDate
+        );
 
-      // Per day salary based on payroll policy workingDaysInMonth
-      const perDaySalary = Number((netPaySalary / workingDays).toFixed(2));
+        let status = 'Absent';
+        let timeStatus = '-';
+        let reason = 'Check-in not recorded';
+        let dayValue = 0;
+        let totalHours = 0;
 
-      // ===== Attendance =====
-      const empAttendance = attendances.filter(a => a.employeeID.toString() === user._id.toString());
-
-      // Calculate till date salary with half-day logic
-      let tillDateSalary = 0;
-      let presentDays = 0; // Updated to include half-day logic
-
-      empAttendance.forEach(a => {
-        if (!a.present) return;
-
-        const dayLower = (a.day || "").toLowerCase();
-        let daySalary = perDaySalary;
-
-        const hours = parseFloat(a.totalHours) || 0;
-
-        if (dayLower === "saturday" && hours < 5) {
-          daySalary = perDaySalary * halfDayFraction; // Half-day
-          presentDays += halfDayFraction;
-        } else if (!["saturday", "sunday"].includes(dayLower) && hours < 7) {
-          daySalary = perDaySalary * halfDayFraction; // Half-day
-          presentDays += halfDayFraction;
+        if (leave) {
+          status = 'Approved Leave';
+          timeStatus = 'Full Time';
+          reason = `Approved leave: ${leave.type || leave.title || 'Leave'}`;
+          dayValue = 1;
+          leaveDays += 1;
+        } else if (dayLower === 'sunday' && cycle.openDaysInMonth > cycle.sundayAutoPaidAbove) {
+          status = 'Present';
+          timeStatus = 'Full Time';
+          reason = 'Sunday auto paid by salary policy';
+          dayValue = 1;
+          sundayPaidDays += 1;
+        } else if (record?.present) {
+          totalHours = toNumber(record.totalHours) || hoursBetweenTimes(record.attendanceIn, record.attendanceOut);
+          timeStatus = record.timeStatus || timeStatusFromHours(day, totalHours, record.status);
+          status = record.status || attendanceStatusFromTime(day, totalHours, record.status);
+          if (timeStatus === 'Half Time' || status === 'Half Day') {
+            status = 'Half Day';
+            timeStatus = 'Half Time';
+            reason = 'Worked less than 7 hours';
+            dayValue = 0.5;
+            halfDays += 1;
+          } else {
+            status = status === 'Approved Leave' ? 'Approved Leave' : 'Present';
+            timeStatus = 'Full Time';
+            reason = record.reason || 'Attendance completed';
+            dayValue = 1;
+            presentDays += 1;
+          }
+        } else if (dayLower === 'sunday') {
+          status = 'Holiday';
+          timeStatus = 'Holiday';
+          reason = 'Weekly off';
         } else {
-          // Full day
-          presentDays += 1;
+          absentDays += 1;
         }
 
-        tillDateSalary += daySalary;
+        payableDays += dayValue;
+        return {
+          date: isoDate,
+          day,
+          status,
+          timeStatus,
+          reason: record?.reason || reason,
+          attendanceIn: record?.attendanceIn || '-',
+          attendanceOut: record?.attendanceOut || '-',
+          totalHours: totalHours || record?.totalHours || '-',
+          payableDays: dayValue,
+        };
       });
 
-      tillDateSalary = Number(tillDateSalary.toFixed(2));
-      presentDays = Number(presentDays.toFixed(1)); // Optional: 1 decimal for half-days
-
-      // ===== Approved Expenses =====
-      const empExpenses = expenses.filter(e =>
-        e.employeeID.toString() === user._id.toString() &&
-        e.adminResponse === "Approved" &&
-        new Date(e.appliedDate).getFullYear() === year &&
-        new Date(e.appliedDate).getMonth() + 1 === month
-      );
-
-      const totalExpenses = empExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-
-      // Total pay = till date salary + total approved expenses
-      const totalPay = Number((tillDateSalary + totalExpenses).toFixed(2));
+      const approvedExpenseItems = expenses.filter(item => {
+        const appliedDate = item.appliedDate;
+        return String(item.employeeID) === employeeId && appliedDate >= cycleStartIso && appliedDate <= cycleEndIso;
+      });
+      const totalExpenses = approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0);
+      const salaryTillDate = Number((payableDays * perDaySalary).toFixed(2));
+      const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
 
       return {
         employeeID: user._id,
-        name: user.name,
+        name: user.name || user.username,
         email: user.email,
-
+        username: user.username,
+        employeeCode: user.employeeCode,
         month,
         year,
-
-        earnings: {
-          gross: grossSalary,
+        cycle: {
+          startDate: cycleStartIso,
+          endDate: cycleEndIso,
+          openDaysInMonth: cycle.openDaysInMonth,
+          salaryCycleStartDay: cycle.startDay,
+          salaryCycleEndDay: cycle.endDay,
         },
-
+        earnings: empSalary?.earnings || { gross: assignedGross },
+        deductions: empSalary?.deductions || {},
+        assignedNetPay,
+        assignedGross,
         perDaySalary,
-
-        deductions: {
-          pfEmployee: empSalary?.deductions?.pfEmployee || 0,
-          esiEmployee: empSalary?.deductions?.esiEmployee || 0,
-          tdsMonthly: empSalary?.deductions?.tdsMonthly || 0,
-          professionalTax: empSalary?.deductions?.professionalTax || 0,
-        },
-
-        netPay: netPaySalary, // monthly net pay assigned
-
-        presentDays, // Now includes half-day fraction
-
-        tillDateSalary,
+        payableDays: Number(payableDays.toFixed(2)),
+        presentDays,
+        halfDays,
+        leaveDays,
+        sundayPaidDays,
+        absentDays,
+        salaryTillDate,
         totalExpenses,
         totalPay,
+        attendanceDetails,
       };
     });
 
     res.json({
       success: true,
       data: results,
-      message: "Till-date salary calculated successfully",
+      cycle: {
+        startDate: cycleStartIso,
+        endDate: cycleEndIso,
+        openDaysInMonth: cycle.openDaysInMonth,
+        salaryCycleStartDay: cycle.startDay,
+        salaryCycleEndDay: cycle.endDay,
+      },
+      message: "Monthly cycle salary calculated successfully",
     });
   } catch (err) {
     console.error("Salary error:", err);
@@ -432,6 +610,70 @@ class UserController {
     });
   }
 };
+
+  exportMonthlySalariesCsv = async (req, res) => {
+    const originalJson = res.json.bind(res);
+    let payload = null;
+    res.json = data => {
+      payload = data;
+      return data;
+    };
+    await this.calculateCurrentMonthSalaries(req, res);
+    res.json = originalJson;
+    if (!payload?.success) {
+      return res.status(500).json(payload || { success: false, message: 'Export failed' });
+    }
+    const rows = [
+      [
+        'Employee Name',
+        'Email',
+        'Employee ID',
+        'Month',
+        'Year',
+        'Cycle Start',
+        'Cycle End',
+        'Open Days',
+        'Assigned Net Pay',
+        'Per Day Salary',
+        'Payable Days',
+        'Present Days',
+        'Half Days',
+        'Approved Leave Days',
+        'Sunday Paid Days',
+        'Absent Days',
+        'Salary Till Date',
+        'Approved Expenses',
+        'Total Pay',
+      ],
+      ...payload.data.map(item => [
+        item.name,
+        item.email,
+        item.username || item.employeeCode || String(item.employeeID),
+        item.month,
+        item.year,
+        item.cycle?.startDate,
+        item.cycle?.endDate,
+        item.cycle?.openDaysInMonth,
+        item.assignedNetPay,
+        item.perDaySalary,
+        item.payableDays,
+        item.presentDays,
+        item.halfDays,
+        item.leaveDays,
+        item.sundayPaidDays,
+        item.absentDays,
+        item.salaryTillDate,
+        item.totalExpenses,
+        item.totalPay,
+      ]),
+    ];
+    const csv = rows
+      .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="monthly-salaries-${req.query.month || new Date().getMonth() + 1}-${req.query.year || new Date().getFullYear()}.csv"`);
+    return res.send(csv);
+  }
 
 
 createUser = async (req, res) => {
@@ -973,14 +1215,16 @@ checkOutEmployeeAttendance = async (req, res, next) => {
     });
 
     // ✅ Calculate total hours as decimal
-    const inTime = new Date(`${year}-${month}-${date} ${record.attendanceIn}`);
-    const outTime = new Date(`${year}-${month}-${date} ${attendanceOut}`);
-    const totalMs = outTime - inTime;
-    const totalHours = (totalMs / (1000 * 60 * 60)).toFixed(2); // e.g. "4.52"
+    const totalHours = hoursBetweenTimes(record.attendanceIn, attendanceOut).toFixed(2);
+    const timeStatus = timeStatusFromHours(record.day, Number(totalHours), record.status);
+    const status = timeStatus === "Half Time" ? "Half Day" : record.status === "Approved Leave" ? "Approved Leave" : "Present";
 
     const updated = await attendanceService.updateAttendanceOut(record._id, {
       attendanceOut,
       totalHours,
+      timeStatus,
+      status,
+      reason: timeStatus === "Half Time" ? "Worked less than 7 hours" : record.reason,
       checkOutLocation: attendanceLocationPayload(
         latitude,
         longitude,
@@ -1072,17 +1316,14 @@ updateEmployeeAttendance = async (req, res, next) => {
     }
 
     // ✅ Present case
-    const inTime = new Date(`${year}-${month}-${date} ${attendanceIn}`);
-    const outTime = new Date(`${year}-${month}-${date} ${attendanceOut}`);
-    const totalHours = (outTime - inTime) / (1000 * 60 * 60);
-
-    const lateThreshold = new Date(`${year}-${month}-${date} 11:00:00`);
-    const isLate = inTime > lateThreshold ? "Yes" : "No";
+    const totalHours = hoursBetweenTimes(attendanceIn, attendanceOut);
+    const inMinutes = parseTimeToMinutes(attendanceIn);
+    const isLate = inMinutes !== null && inMinutes > 11 * 60 ? "Yes" : "No";
 
     let timeStatus = "-";
     const d = (day || "").toLowerCase();
-    if (d === "sunday") timeStatus = "Full Time";
-    else if (d === "saturday") timeStatus = totalHours >= 5 ? "Full Time" : "Half Time";
+    if (d === "sunday") timeStatus = "Holiday";
+    else if (d === "saturday") timeStatus = totalHours > 0 ? "Full Time" : "-";
     else timeStatus = totalHours >= 7 ? "Full Time" : "Half Time";
 
     const attendanceData = {
@@ -1092,6 +1333,7 @@ updateEmployeeAttendance = async (req, res, next) => {
       totalHours: totalHours.toFixed(2),
       late: isLate,
       timeStatus,
+      reason: timeStatus === "Half Time" ? "Worked less than 7 hours" : req.body.reason || "",
       present: true,
       status: timeStatus === "Half Time" ? "Half Day" : "Present",
       date,

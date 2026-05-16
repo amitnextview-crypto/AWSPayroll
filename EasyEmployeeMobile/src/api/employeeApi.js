@@ -73,8 +73,10 @@ export const deleteAdminSalary = id => client.delete(`/admin/salary/${id}`);
 export const getAdminSalaries = data => client.post('/admin/view-all-salary', data);
 export const generateAdminMonthlySalaries = data =>
   client.post('/admin/generate-monthly-salaries', data);
-export const calculateCurrentMonthSalaries = () =>
-  client.get('/admin/calculate-current-month-salaries');
+export const calculateCurrentMonthSalaries = params =>
+  client.get('/admin/calculate-current-month-salaries', {params});
+export const exportAdminMonthlySalaries = params =>
+  client.get('/admin/monthly-salaries/export', {params, responseType: 'text'});
 export const sendAdminPayslip = data => client.post('/admin/payslip/send-email', data);
 export const getSalaryTaxRules = () => client.get('/admin/salary-tax-rules');
 export const addSalaryTaxRule = data => client.post('/admin/salary-tax-rules', data);

@@ -45,9 +45,23 @@ const defaultPolicies = [
     ],
   },
   {
-    title: 'Salary & Payroll Policy',
+    title: 'Salary Cycle Policy',
     category: 'Payroll',
     sortOrder: 3,
+    isDefault: true,
+    rules: [
+      ['Office Open Days In Month', '26'],
+      ['Salary Cycle Start Day', '1'],
+      ['Salary Cycle End Day', '31'],
+      ['Half Time Minimum Hours', '7'],
+      ['Approved Leave Attendance', 'Full Time'],
+      ['Sunday Auto Paid When Open Days Above', '26'],
+    ],
+  },
+  {
+    title: 'Salary & Payroll Policy',
+    category: 'Payroll',
+    sortOrder: 4,
     isDefault: true,
     rules: [
       ['Payroll Cycle', '1st to Last Day of Month'],
@@ -62,7 +76,7 @@ const defaultPolicies = [
   {
     title: 'Overtime Policy',
     category: 'Overtime',
-    sortOrder: 4,
+    sortOrder: 5,
     isDefault: true,
     rules: [
       ['Minimum Overtime', '2 Hours'],
@@ -75,7 +89,7 @@ const defaultPolicies = [
   {
     title: 'Late Mark & Deduction Policy',
     category: 'Attendance',
-    sortOrder: 5,
+    sortOrder: 6,
     isDefault: true,
     rules: [
       ['Allowed Late Marks', '3 per month'],
@@ -87,7 +101,7 @@ const defaultPolicies = [
   {
     title: 'Holiday Policy',
     category: 'Holiday',
-    sortOrder: 6,
+    sortOrder: 7,
     isDefault: true,
     rules: [
       ['National Holidays', '26 January, 15 August, 2 October'],
@@ -100,7 +114,7 @@ const defaultPolicies = [
   {
     title: 'Tax & Statutory Deduction Policy',
     category: 'Tax',
-    sortOrder: 7,
+    sortOrder: 8,
     isDefault: true,
     rules: [
       ['PF Deduction', '12% Employee + 12% Employer'],
@@ -114,7 +128,7 @@ const defaultPolicies = [
   {
     title: 'Bonus & Incentive Policy',
     category: 'Bonus',
-    sortOrder: 8,
+    sortOrder: 9,
     isDefault: true,
     rules: [
       ['Performance Bonus', 'Yearly based on performance'],
@@ -127,7 +141,7 @@ const defaultPolicies = [
   {
     title: 'Reimbursement Policy',
     category: 'Reimbursement',
-    sortOrder: 9,
+    sortOrder: 10,
     isDefault: true,
     rules: [
       ['Travel Reimbursement', 'Actual bills required'],
@@ -140,7 +154,7 @@ const defaultPolicies = [
   {
     title: 'Exit Policy',
     category: 'Exit',
-    sortOrder: 10,
+    sortOrder: 11,
     isDefault: true,
     rules: [
       ['Notice Period', '30 Days'],
@@ -154,7 +168,7 @@ const defaultPolicies = [
   {
     title: 'Probation Policy',
     category: 'Probation',
-    sortOrder: 11,
+    sortOrder: 12,
     isDefault: true,
     rules: [
       ['Probation Period', '6 Months'],
@@ -166,7 +180,7 @@ const defaultPolicies = [
   {
     title: 'Team & Reporting Policy',
     category: 'Team',
-    sortOrder: 12,
+    sortOrder: 13,
     isDefault: true,
     rules: [
       ['Every Employee', 'Must belong to one team'],
@@ -178,7 +192,7 @@ const defaultPolicies = [
   {
     title: 'Security Policy',
     category: 'Security',
-    sortOrder: 13,
+    sortOrder: 14,
     isDefault: true,
     rules: [
       ['Password Change', 'Every 90 Days'],
