@@ -33,6 +33,7 @@ export const deleteExpense = id => client.delete(`/employee/expenses/${id}`);
 export const getAdminCounts = () => client.get('/admin/counts');
 export const getAdminDashboard = () => client.get('/admin/dashboard');
 export const getOfficeLocations = () => client.get('/admin/office-locations');
+export const getEmployeeOfficeLocations = () => client.get('/employee/office-locations');
 export const addOfficeLocation = data => client.post('/admin/office-locations', data);
 export const updateOfficeLocation = (id, data) => client.patch(`/admin/office-locations/${id}`, data);
 export const deleteOfficeLocation = id => client.delete(`/admin/office-locations/${id}`);
@@ -85,3 +86,8 @@ export const addPayrollPolicy = data => client.post('/admin/payroll-policies', d
 export const updatePayrollPolicy = (id, data) =>
   client.patch(`/admin/payroll-policies/${id}`, data);
 export const deletePayrollPolicy = id => client.delete(`/admin/payroll-policies/${id}`);
+export const getEmployeePayrollPolicies = () => client.get('/employee/payroll-policies');
+export const getCompanySettings = () => client.get('/employee/company-settings');
+export const getAdminCompanySettings = () => client.get('/admin/company-settings');
+export const updateAdminCompanySettings = data =>
+  client.patch('/admin/company-settings', data);

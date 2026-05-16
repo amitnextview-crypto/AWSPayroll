@@ -47,7 +47,7 @@ app.use(cors({
     "http://localhost:3000",
      "https://nextviewpayrollfrontendmerns-5wt1.vercel.app"
   ],
-   methods: ["GET", "POST", "PUT", "DELETE"],
+   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,                // allow cookies/auth headers
 }));
 

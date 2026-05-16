@@ -6,7 +6,8 @@ class ExpenseController {
 addExpense = async (req, res) => {
   try {
     const employeeID = req.user?._id; // From auth middleware
-    const { type, amount, description, appliedDate } = req.body;
+    const { type, amount, description } = req.body;
+    const appliedDate = req.body.appliedDate || new Date().toISOString().split("T")[0];
 
     if (!employeeID || !type || !amount) {
       console.log("Missing Fields:", { employeeID, type, amount });

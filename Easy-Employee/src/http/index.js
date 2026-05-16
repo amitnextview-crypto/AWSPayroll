@@ -5,7 +5,8 @@ import { toast } from 'react-toastify';
 const base = process.env.REACT_APP_BASE_URL?.replace(/\/+$/, '');
 const api = axios.create({
   baseURL: `${base}/api`,
-  withCredentials: true
+  withCredentials: true,
+  timeout: 30000
 });
 
 
@@ -101,7 +102,11 @@ api.interceptors.response.use((response)=>{
     return response.data;
 },(error)=>{
     console.log(error);
-    return error.response.data
+    if (error.response?.data) return error.response.data;
+    if (error.code === 'ECONNABORTED') {
+        return { success: false, message: 'Connection timed out. Please try again.' };
+    }
+    return { success: false, message: 'Unable to connect to server. Please try again.' };
 })
 
 export default api;

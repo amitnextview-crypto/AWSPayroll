@@ -1,10 +1,10 @@
 import React from 'react';
-import {Building2, CalendarCheck, ClipboardList, Info, IndianRupee, LayoutDashboard, ReceiptText, Settings} from 'lucide-react-native';
+import {Building2, CalendarCheck, ClipboardList, FileText, IndianRupee, LayoutDashboard, ReceiptText, Settings} from 'lucide-react-native';
 import {MenuGrid} from '../../components/MenuGrid';
 import {Screen} from '../../components/Screen';
 
 export const EmployeeMenuScreen = ({navigation}) => {
-  const openInfo = (title, body) => navigation.navigate('Info', {title, body});
+  const openInfo = (title, body, kind) => navigation.navigate('Info', {title, body, kind});
   return (
     <Screen>
       <MenuGrid
@@ -16,9 +16,8 @@ export const EmployeeMenuScreen = ({navigation}) => {
           {label: 'Leave Applications', caption: 'Leave request history', icon: ClipboardList, onPress: () => navigation.navigate('Leave')},
           {label: 'Salary', caption: 'Assigned salary details', icon: IndianRupee, onPress: () => navigation.navigate('Salary')},
           {label: 'Submit Expense', caption: 'Create and track expenses', icon: ReceiptText, onPress: () => navigation.navigate('EmployeeExpenses')},
-          {label: 'Settings', caption: 'App configuration', icon: Settings, onPress: () => openInfo('Settings', 'Attendance uses live location for onsite employees. Backend is connected to the hosted Render API.')},
-          {label: 'Contact me', caption: 'Company contact', icon: Info, onPress: () => openInfo('Contact me', 'Company contact details can be added here.')},
-          {label: 'About me', caption: 'Employee profile context', icon: Info, onPress: () => openInfo('About me', 'Your profile, attendance, leave, salary, expense, and team data are loaded from AWSPayroll backend.')},
+          {label: 'Settings', caption: 'Help email and number', icon: Settings, onPress: () => openInfo('Settings', 'Company help contact details are managed by admin.', 'settings')},
+          {label: 'Company Policies', caption: 'Company rules and benefits', icon: FileText, onPress: () => navigation.navigate('CompanyPolicies')},
         ]}
       />
     </Screen>

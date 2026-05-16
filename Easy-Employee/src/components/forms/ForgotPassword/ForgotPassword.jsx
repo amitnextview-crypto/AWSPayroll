@@ -16,7 +16,7 @@ const ForgotPassword = ({onNext}) =>
         const res = await forgotPassword({email:emailAddress});
         if(res.success)
         {
-            toast.error(res.message);
+            toast.success(res.message);
             dispatch(setEmail(emailAddress))
             onNext();
         }

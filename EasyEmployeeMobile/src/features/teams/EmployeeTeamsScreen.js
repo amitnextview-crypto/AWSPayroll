@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
-import {RefreshControl, StyleSheet, Text} from 'react-native';
+import {RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {UsersRound} from 'lucide-react-native';
 import {useSelector} from 'react-redux';
 import {getEmployeeTeam, getEmployeeTeamMembers} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
@@ -17,7 +18,9 @@ export const EmployeeTeamsScreen = () => {
   const load = async () => {
     const teamId = user?.team?.id || user?.team?._id || user?.team;
     if (!teamId) {
-      setError('No team assigned.');
+      setError('');
+      setTeam(null);
+      setMembers([]);
       return;
     }
     setLoading(true);
@@ -55,6 +58,17 @@ export const EmployeeTeamsScreen = () => {
           <Text style={styles.meta}>{member.mobile || '-'}</Text>
         </Card>
       ))}
+      {!team && !loading && !error ? (
+        <Card style={styles.emptyCard}>
+          <View style={styles.iconWrap}>
+            <UsersRound color={colors.primary} size={26} />
+          </View>
+          <Text style={styles.emptyTitle}>Team assignment pending</Text>
+          <Text style={styles.emptyText}>
+            Your workspace is ready. Once admin assigns you to a team, members and leader details will appear here.
+          </Text>
+        </Card>
+      ) : null}
     </Screen>
   );
 };
@@ -63,4 +77,16 @@ const styles = StyleSheet.create({
   title: {color: colors.text, fontSize: 17, fontWeight: '900'},
   meta: {color: colors.textMuted, marginTop: spacing.xs},
   error: {color: colors.danger},
+  emptyCard: {alignItems: 'center', paddingVertical: spacing.xl},
+  iconWrap: {
+    alignItems: 'center',
+    backgroundColor: '#2457c518',
+    borderRadius: 8,
+    height: 58,
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    width: 58,
+  },
+  emptyTitle: {color: colors.text, fontSize: 18, fontWeight: '900', textAlign: 'center'},
+  emptyText: {color: colors.textMuted, lineHeight: 22, marginTop: spacing.sm, textAlign: 'center'},
 });

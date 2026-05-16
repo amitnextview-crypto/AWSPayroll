@@ -1,7 +1,8 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {StyleSheet, Switch, Text, View} from 'react-native';
 import {useDispatch, useSelector} from 'react-redux';
 import {Moon, Save, Sun} from 'lucide-react-native';
+import {getAdminCompanySettings, updateAdminCompanySettings} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
@@ -27,11 +28,45 @@ export const AdminSettingsScreen = () => {
     backupEnabled: true,
     companyName: 'Amit Web Solution Company',
     supportEmail: 'amitwebsolutioncompany@gmail.com',
+    supportPhone: '',
   });
+  const [savingHelp, setSavingHelp] = useState(false);
   const [toast, setToast] = useState('');
 
   const toggle = key => setSettings(current => ({...current, [key]: !current[key]}));
   const set = (key, value) => setSettings(current => ({...current, [key]: value}));
+
+  useEffect(() => {
+    const loadHelp = async () => {
+      try {
+        const response = await getAdminCompanySettings();
+        const data = response?.data || {};
+        setSettings(current => ({
+          ...current,
+          supportEmail: data.supportEmail || current.supportEmail,
+          supportPhone: data.supportPhone || '',
+        }));
+      } catch (err) {
+        setToast(err.message || 'Help contact could not be loaded.');
+      }
+    };
+    loadHelp();
+  }, []);
+
+  const saveHelp = async () => {
+    setSavingHelp(true);
+    try {
+      await updateAdminCompanySettings({
+        supportEmail: settings.supportEmail,
+        supportPhone: settings.supportPhone,
+      });
+      setToast('Help contact updated successfully.');
+    } catch (err) {
+      setToast(err.message || 'Help contact could not be updated.');
+    } finally {
+      setSavingHelp(false);
+    }
+  };
 
   return (
     <Screen>
@@ -53,6 +88,16 @@ export const AdminSettingsScreen = () => {
         <Text style={[styles.section, {color: colors.text}]}>Company Settings</Text>
         <AppTextInput label="Company Name" value={settings.companyName} onChangeText={value => set('companyName', value)} />
         <AppTextInput label="Support Email" value={settings.supportEmail} onChangeText={value => set('supportEmail', value)} />
+      </Card>
+
+      <Card>
+        <Text style={[styles.section, {color: colors.text}]}>Help Card</Text>
+        <Text style={[styles.meta, {color: colors.textMuted}]}>This email and number will be visible to employees and leaders in Settings.</Text>
+        <AppTextInput label="Help Email" keyboardType="email-address" value={settings.supportEmail} onChangeText={value => set('supportEmail', value)} />
+        <AppTextInput label="Help Number" keyboardType="phone-pad" value={settings.supportPhone} onChangeText={value => set('supportPhone', value)} />
+        <View style={styles.actions}>
+          <AppButton icon={Save} title="Update Help Card" loading={savingHelp} onPress={saveHelp} />
+        </View>
       </Card>
 
       <Card>

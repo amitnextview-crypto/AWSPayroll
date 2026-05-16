@@ -8,9 +8,12 @@ import {todayParts} from '../utils/date';
 
 export const loadAttendance = createAsyncThunk(
   'attendance/load',
-  async (employeeID, {rejectWithValue}) => {
+  async (payload, {rejectWithValue}) => {
     try {
-      const {year, month} = todayParts();
+      const employeeID = typeof payload === 'object' ? payload.employeeID : payload;
+      const current = todayParts();
+      const year = typeof payload === 'object' && payload.year ? Number(payload.year) : current.year;
+      const month = typeof payload === 'object' && payload.month ? Number(payload.month) : current.month;
       const response = await getAttendance({employeeID, year, month});
       if (!response?.success) {
         return rejectWithValue(response?.message || 'Attendance not found.');

@@ -3,8 +3,10 @@ import {ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, Vi
 import {useDispatch, useSelector} from 'react-redux';
 import {LogIn, LogOut, MapPin} from 'lucide-react-native';
 import {AppButton} from '../../components/AppButton';
+import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {verifyOfficeLocation} from '../../services/locationService';
@@ -43,6 +45,13 @@ export const AttendanceScreen = () => {
     state => state.attendance,
   );
   const [locationState, setLocationState] = useState(null);
+  const currentParts = useMemo(() => todayParts(), []);
+  const [filters, setFilters] = useState({
+    mode: 'month',
+    day: '',
+    month: String(currentParts.month),
+    year: String(currentParts.year),
+  });
 
   const todayRecord = useMemo(() => {
     const today = todayParts();
@@ -54,20 +63,45 @@ export const AttendanceScreen = () => {
     );
   }, [records]);
 
-  const monthlyCount = useMemo(
-    () => records.filter(item => item.present).length,
-    [records],
-  );
+  const visibleRecords = useMemo(() => {
+    const filtered = records.filter(item => {
+      if (filters.mode === 'day' && filters.day) {
+        return String(item.date) === String(filters.day);
+      }
+      return true;
+    });
+    return [...filtered].sort((a, b) => Number(b.date) - Number(a.date));
+  }, [filters.day, filters.mode, records]);
+
+  const monthlyCount = useMemo(() => records.filter(item => item.present).length, [records]);
 
   const refresh = useCallback(() => {
     if (user?.id) {
-      dispatch(loadAttendance(user.id));
+      dispatch(loadAttendance({
+        employeeID: user.id,
+        month: Number(filters.month) || currentParts.month,
+        year: Number(filters.year) || currentParts.year,
+      }));
     }
-  }, [dispatch, user?.id]);
+  }, [currentParts.month, currentParts.year, dispatch, filters.month, filters.year, user?.id]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkLocation = async () => {
+      const result = await verifyOfficeLocation(user?.workType);
+      if (mounted) {
+        setLocationState(result);
+      }
+    };
+    checkLocation();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.workType]);
 
   useEffect(() => {
     if (error || message) {
@@ -85,6 +119,12 @@ export const AttendanceScreen = () => {
     }
     return result;
   };
+
+  const isCurrentMonthFilter =
+    Number(filters.month) === currentParts.month &&
+    Number(filters.year) === currentParts.year;
+  const canCheckIn = Boolean(locationState?.allowed) && isCurrentMonthFilter && !todayRecord?.attendanceIn;
+  const canCheckOut = isCurrentMonthFilter && Boolean(todayRecord?.attendanceIn) && !todayRecord?.attendanceOut;
 
   const handleCheckIn = async () => {
     const locationResult = await runLocationGate();
@@ -143,9 +183,17 @@ export const AttendanceScreen = () => {
                 : 'Location unrestricted for this work type'}
           </Text>
         </View>
+        {locationState?.message ? <Text style={styles.locationHint}>{locationState.message}</Text> : null}
         <View style={styles.actions}>
           <AppButton
-            disabled={Boolean(todayRecord?.attendanceIn)}
+            icon={MapPin}
+            loading={actionLoading}
+            onPress={runLocationGate}
+            title="Refresh Location"
+            variant="muted"
+          />
+          <AppButton
+            disabled={!canCheckIn}
             icon={LogIn}
             loading={actionLoading}
             onPress={handleCheckIn}
@@ -153,7 +201,7 @@ export const AttendanceScreen = () => {
             variant="success"
           />
           <AppButton
-            disabled={!todayRecord?.attendanceIn || Boolean(todayRecord?.attendanceOut)}
+            disabled={!canCheckOut}
             icon={LogOut}
             loading={actionLoading}
             onPress={handleCheckOut}
@@ -163,11 +211,51 @@ export const AttendanceScreen = () => {
         </View>
       </Card>
 
+      <Card>
+        <Text style={styles.filterTitle}>Attendance Filter</Text>
+        <FilterChips
+          items={[
+            {label: 'By month', value: 'month'},
+            {label: 'By day', value: 'day'},
+          ]}
+          value={filters.mode}
+          onChange={mode => setFilters(current => ({...current, mode}))}
+        />
+        <View style={styles.filterGrid}>
+          {filters.mode === 'day' ? (
+            <AppTextInput
+              keyboardType="numeric"
+              label="Day"
+              placeholder="1-31"
+              value={filters.day}
+              onChangeText={day => setFilters(current => ({...current, day: day.replace(/[^0-9]/g, '')}))}
+              style={styles.filterInput}
+            />
+          ) : null}
+          <AppTextInput
+            keyboardType="numeric"
+            label="Month"
+            placeholder="1-12"
+            value={filters.month}
+            onChangeText={month => setFilters(current => ({...current, month: month.replace(/[^0-9]/g, '')}))}
+            style={styles.filterInput}
+          />
+          <AppTextInput
+            keyboardType="numeric"
+            label="Year"
+            placeholder="2026"
+            value={filters.year}
+            onChangeText={year => setFilters(current => ({...current, year: year.replace(/[^0-9]/g, '')}))}
+            style={styles.filterInput}
+          />
+        </View>
+      </Card>
+
       {loading ? (
         <ActivityIndicator color={colors.primary} />
       ) : (
         <FlatList
-          data={records}
+          data={visibleRecords}
           keyExtractor={item => item._id}
           refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
           renderItem={({item}) => <AttendanceItem item={item} />}
@@ -209,6 +297,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
   },
+  locationHint: {
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+  },
   actions: {
     gap: spacing.md,
     marginTop: spacing.lg,
@@ -246,5 +339,21 @@ const styles = StyleSheet.create({
   meta: {
     color: colors.textMuted,
     minWidth: '45%',
+  },
+  filterTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: spacing.md,
+  },
+  filterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  filterInput: {
+    flexBasis: '30%',
+    flexGrow: 1,
   },
 });

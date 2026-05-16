@@ -1,12 +1,14 @@
-import React from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {BriefcaseBusiness, CalendarCheck, ClipboardList, IndianRupee, MapPin, ReceiptText, Users} from 'lucide-react-native';
+import {getAttendance, getEmployeeExpenses, getLeaveApplications} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
+import {todayParts} from '../../utils/date';
 
 const Field = ({label, value}) => (
   <View style={styles.field}>
@@ -17,6 +19,46 @@ const Field = ({label, value}) => (
 
 export const HomeScreen = ({navigation}) => {
   const {user} = useSelector(state => state.auth);
+  const [summary, setSummary] = useState({
+    attendanceStatus: 'Loading',
+    expenseCount: 0,
+    leaveCount: 0,
+  });
+
+  const today = useMemo(() => todayParts(), []);
+
+  const loadSummary = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+    try {
+      const [attendanceResponse, expenseResponse, leaveResponse] = await Promise.all([
+        getAttendance({employeeID: user.id, year: today.year, month: today.month}),
+        getEmployeeExpenses(),
+        getLeaveApplications({applicantID: user.id}),
+      ]);
+      const attendance = attendanceResponse?.data || [];
+      const todayRecord = attendance.find(
+        item => item.date === today.date && item.month === today.month && item.year === today.year,
+      );
+      const attendanceStatus = todayRecord?.attendanceOut
+        ? 'Completed'
+        : todayRecord?.attendanceIn
+          ? 'Checked in'
+          : 'Not checked in';
+      setSummary({
+        attendanceStatus,
+        expenseCount: (expenseResponse?.data || expenseResponse?.expenses || []).length,
+        leaveCount: (leaveResponse?.data || []).length,
+      });
+    } catch (err) {
+      setSummary(current => ({...current, attendanceStatus: 'Unavailable'}));
+    }
+  }, [today.date, today.month, today.year, user?.id]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
 
   return (
     <Screen>
@@ -27,10 +69,10 @@ export const HomeScreen = ({navigation}) => {
       </View>
 
       <View style={styles.grid}>
-        <MetricCard icon={CalendarCheck} label="Attendance" value="Live" tone="success" />
-        <MetricCard icon={ClipboardList} label="Leave" value="Apply" tone="primary" />
+        <MetricCard icon={CalendarCheck} label="Today Attendance" value={summary.attendanceStatus} tone="success" />
+        <MetricCard icon={ClipboardList} label="Leave Count" value={String(summary.leaveCount)} tone="primary" />
         <MetricCard icon={IndianRupee} label="Salary" value="View" tone="warning" />
-        <MetricCard icon={ReceiptText} label="Expense" value="Submit" tone="info" />
+        <MetricCard icon={ReceiptText} label="Expense Count" value={String(summary.expenseCount)} tone="info" />
       </View>
 
       <Card>

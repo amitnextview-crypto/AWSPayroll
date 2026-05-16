@@ -1,5 +1,6 @@
 import {Alert, Linking, PermissionsAndroid, Platform} from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
+import {getEmployeeOfficeLocations} from '../api/employeeApi';
 import {LOCATION_OPTIONS, OFFICE_LOCATION} from '../config/env';
 
 const toRadians = value => (value * Math.PI) / 180;
@@ -64,17 +65,41 @@ export const getCurrentLocation = () =>
     );
   });
 
+export const getActiveOfficeLocation = async () => {
+  try {
+    const response = await getEmployeeOfficeLocations();
+    const locations = response?.data || [];
+    return locations.find(item => item.status === 'active') || locations[0] || OFFICE_LOCATION;
+  } catch (error) {
+    return OFFICE_LOCATION;
+  }
+};
+
 export const verifyOfficeLocation = async workType => {
+  const officeLocation = await getActiveOfficeLocation();
   if (String(workType).toLowerCase() !== 'onsite') {
     return {
       allowed: true,
       distanceMeters: 0,
+      officeLocation,
       message: 'Location check skipped for non-onsite employee.',
     };
   }
 
   const hasPermission = await requestLocationPermission();
   if (!hasPermission) {
+    const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+    if (isDev) {
+      return {
+        allowed: true,
+        distanceMeters: 0,
+        accuracy: officeLocation.radiusMeters || 100,
+        latitude: officeLocation.latitude,
+        longitude: officeLocation.longitude,
+        officeLocation,
+        message: 'Development mode location fallback used.',
+      };
+    }
     Alert.alert(
       'Location required',
       'Please allow precise location access to mark onsite attendance.',
@@ -87,14 +112,19 @@ export const verifyOfficeLocation = async workType => {
   const distanceMeters = distanceInMeters({
     latitude: coords.latitude,
     longitude: coords.longitude,
-  });
+  }, officeLocation);
+  const radiusMeters = Number(officeLocation.radiusMeters || OFFICE_LOCATION.radiusMeters || 100);
+  const allowed = distanceMeters <= radiusMeters;
 
   return {
-    allowed: true,
+    allowed,
     distanceMeters,
     accuracy: coords.accuracy,
     latitude: coords.latitude,
     longitude: coords.longitude,
-    message: 'Location captured. Office radius will be verified by server.',
+    officeLocation,
+    message: allowed
+      ? `You are within ${Math.round(radiusMeters)}m office radius.`
+      : `You are ${Math.round(distanceMeters)}m from office. Move within ${Math.round(radiusMeters)}m to check in.`,
   };
 };

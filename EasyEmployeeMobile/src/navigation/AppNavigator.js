@@ -37,6 +37,7 @@ import {LeaveScreen} from '../features/leave/LeaveScreen';
 import {EmployeeMenuScreen} from '../features/profile/EmployeeMenuScreen';
 import {HomeScreen} from '../features/profile/HomeScreen';
 import {ProfileScreen} from '../features/profile/ProfileScreen';
+import {CompanyPoliciesScreen} from '../features/policies/CompanyPoliciesScreen';
 import {SalaryScreen} from '../features/salary/SalaryScreen';
 import {EmployeeTeamsScreen} from '../features/teams/EmployeeTeamsScreen';
 import {restoreSession} from '../store/authSlice';
@@ -106,6 +107,7 @@ const EmployeeStack = () => (
     <EmployeeStackNavigator.Screen name="Salary" component={SalaryScreen} />
     <EmployeeStackNavigator.Screen name="EmployeeExpenses" component={ExpenseScreen} options={{title: 'Submit Expense'}} />
     <EmployeeStackNavigator.Screen name="EmployeeTeam" component={EmployeeTeamsScreen} options={{title: 'Team'}} />
+    <EmployeeStackNavigator.Screen name="CompanyPolicies" component={CompanyPoliciesScreen} options={{title: 'Company Policies'}} />
     <EmployeeStackNavigator.Screen name="Info" component={InfoScreen} />
   </ThemedStack>
 );

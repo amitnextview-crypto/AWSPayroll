@@ -8,6 +8,7 @@ import {Card} from '../../components/Card';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
+import {formatApiDate} from '../../utils/date';
 
 export const ExpenseScreen = () => {
   const [items, setItems] = useState([]);
@@ -39,7 +40,7 @@ export const ExpenseScreen = () => {
     }
     setLoading(true);
     try {
-      await addExpense({...form, amount: Number(form.amount)});
+      await addExpense({...form, amount: Number(form.amount), appliedDate: formatApiDate()});
       setForm({type: '', amount: '', description: ''});
       await load();
     } catch (err) {

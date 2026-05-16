@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   },
   value: {
     color: colors.text,
-    fontSize: 27,
+    fontSize: 20,
     fontWeight: '900',
   },
   label: {

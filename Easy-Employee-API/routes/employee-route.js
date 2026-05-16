@@ -4,6 +4,7 @@ const userController = require("../controllers/user-controller");
 const teamController = require("../controllers/team-controller");
 const upload = require("../services/file-upload-service");
 const expenseController = require("../controllers/expenseController");
+const payrollPolicyController = require("../controllers/payrollPolicyController");
 
 router.post(
     "/user",
@@ -18,6 +19,9 @@ router.patch(
 ); // Update Self Account
 router.get("/team/:id", asyncMiddleware(teamController.getTeam));
 router.get("/team/:id/members", asyncMiddleware(teamController.getTeamMembers));
+router.get("/company-settings", asyncMiddleware(userController.getCompanySettings));
+router.get("/office-locations", asyncMiddleware(userController.getOfficeLocations));
+router.get("/payroll-policies", asyncMiddleware(payrollPolicyController.getPolicies));
 router.post(
     "/mark-employee-attendance",
     asyncMiddleware(userController.markEmployeeAttendance)

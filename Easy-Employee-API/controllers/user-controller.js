@@ -6,6 +6,7 @@ const PayrollPolicy = require("../models/payroll-policy-model");
 const UserSalaries = require("../models/user-salary");
 const SalaryTaxRule = require("../models/salary-tax-rule-model");
 const OfficeLocation = require("../models/office-location-model");
+const CompanySetting = require("../models/company-setting-model");
 const Team = require("../models/team-model");
 const ErrorHandler = require('../utils/error-handler');
 const userService = require('../services/user-service');
@@ -154,6 +155,14 @@ const getActiveOfficeLocation = async () => {
   return location;
 };
 
+const getCompanySettingDocument = async () => {
+  let settings = await CompanySetting.findOne({}).sort({ updatedAt: -1 });
+  if (!settings) {
+    settings = await CompanySetting.create({});
+  }
+  return settings;
+};
+
 const distanceInMeters = (from, to = DEFAULT_OFFICE_LOCATION) => {
   const toRadians = value => (value * Math.PI) / 180;
   const earthRadiusMeters = 6371000;
@@ -212,6 +221,30 @@ const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters
 
 
 class UserController {
+  getCompanySettings = async (req, res, next) => {
+    const settings = await getCompanySettingDocument();
+    res.json({ success: true, data: settings });
+  }
+
+  updateCompanySettings = async (req, res, next) => {
+    const current = await getCompanySettingDocument();
+    const data = {
+      supportEmail:
+        req.body.supportEmail === undefined
+          ? current.supportEmail
+          : String(req.body.supportEmail || '').trim(),
+      supportPhone:
+        req.body.supportPhone === undefined
+          ? current.supportPhone
+          : String(req.body.supportPhone || '').trim(),
+    };
+    const updated = await CompanySetting.findByIdAndUpdate(current._id, data, {
+      new: true,
+      runValidators: true,
+    });
+    res.json({ success: true, message: 'Help contact updated', data: updated });
+  }
+
   getOfficeLocations = async (req, res, next) => {
     const locations = await OfficeLocation.find({}).sort({ status: 1, updatedAt: -1 });
     if (!locations.length) {
