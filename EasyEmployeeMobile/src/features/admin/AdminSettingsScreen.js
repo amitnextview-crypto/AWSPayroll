@@ -1,14 +1,13 @@
 import React, {useState} from 'react';
-import {Alert, StyleSheet, Switch, Text, View} from 'react-native';
+import {StyleSheet, Switch, Text, View} from 'react-native';
 import {useDispatch, useSelector} from 'react-redux';
-import {LogOut, Moon, Save, Sun} from 'lucide-react-native';
+import {Moon, Save, Sun} from 'lucide-react-native';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {ToastBanner} from '../../components/ToastBanner';
-import {logoutUser} from '../../store/authSlice';
 import {setTheme} from '../../store/uiSlice';
 import {getThemeColors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -33,13 +32,6 @@ export const AdminSettingsScreen = () => {
 
   const toggle = key => setSettings(current => ({...current, [key]: !current[key]}));
   const set = (key, value) => setSettings(current => ({...current, [key]: value}));
-
-  const logout = () => {
-    Alert.alert('Logout', 'Logout from admin panel?', [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Logout', style: 'destructive', onPress: () => dispatch(logoutUser())},
-    ]);
-  };
 
   return (
     <Screen>
@@ -85,7 +77,6 @@ export const AdminSettingsScreen = () => {
 
       <View style={styles.actions}>
         <AppButton icon={Save} title="Save Settings" onPress={() => setToast('Settings saved locally.')} />
-        <AppButton icon={LogOut} title="Logout" variant="danger" onPress={logout} />
       </View>
     </Screen>
   );

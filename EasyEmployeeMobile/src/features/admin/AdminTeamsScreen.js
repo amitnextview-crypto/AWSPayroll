@@ -120,7 +120,7 @@ export const AdminTeamsScreen = () => {
         const selected = selectedEmployees[teamId] || [];
         const lower = (searchByTeam[teamId] || '').toLowerCase();
         const filteredEmployees = employees.filter(employee => {
-          const text = `${employee.name || ''} ${employee.username || ''} ${employee.employeeCode || ''} ${employee.department || ''} ${employee.designation || ''}`.toLowerCase();
+          const text = `${employee.name || ''} ${employee.email || ''} ${employee.username || ''} ${employee.employeeCode || ''} ${employee.id || employee._id || ''} ${employee.department || ''} ${employee.designation || ''}`.toLowerCase();
           return text.includes(lower);
         });
         return (
@@ -161,8 +161,8 @@ export const AdminTeamsScreen = () => {
               <AppButton icon={ShieldCheck} title="Set First as Leader" variant="muted" onPress={() => runTeamAction(team, changeAdminTeamLeader)} />
               <AppButton icon={UserPlus} title="Add Selected" variant="muted" onPress={() => runTeamAction(team, addAdminTeamMember, true)} />
               <AppButton icon={UserMinus} title="Remove Selected" variant="muted" onPress={() => runTeamAction(team, removeAdminTeamMember, true)} />
-              {team.leader?.id ? (
-                <AppButton icon={UserMinus} title="Remove Leader" variant="danger" onPress={() => removeAdminTeamLeader({teamId, userId: team.leader.id}).then(load).catch(err => setToast(err.message))} />
+              {team.leader?.id || team.leader?._id ? (
+                <AppButton icon={UserMinus} title="Remove Leader" variant="danger" onPress={() => removeAdminTeamLeader({teamId, userId: team.leader.id || team.leader._id}).then(load).catch(err => setToast(err.message))} />
               ) : null}
             </View>
             {teamMembers.map(member => (

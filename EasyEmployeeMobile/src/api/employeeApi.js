@@ -62,12 +62,18 @@ export const assignAdminSalary = data =>
   client.post('/admin/assign-employee-salary', data);
 export const updateAdminSalary = data =>
   client.post('/admin/update-employee-salary', data);
+export const deleteAdminSalary = id => client.delete(`/admin/salary/${id}`);
 export const getAdminSalaries = data => client.post('/admin/view-all-salary', data);
 export const generateAdminMonthlySalaries = data =>
   client.post('/admin/generate-monthly-salaries', data);
 export const calculateCurrentMonthSalaries = () =>
   client.get('/admin/calculate-current-month-salaries');
 export const sendAdminPayslip = data => client.post('/admin/payslip/send-email', data);
+export const getSalaryTaxRules = () => client.get('/admin/salary-tax-rules');
+export const addSalaryTaxRule = data => client.post('/admin/salary-tax-rules', data);
+export const updateSalaryTaxRule = (id, data) =>
+  client.patch(`/admin/salary-tax-rules/${id}`, data);
+export const deleteSalaryTaxRule = id => client.delete(`/admin/salary-tax-rules/${id}`);
 export const getPayrollPolicies = () => client.get('/admin/payroll-policies');
 export const addPayrollPolicy = data => client.post('/admin/payroll-policies', data);
 export const updatePayrollPolicy = (id, data) =>

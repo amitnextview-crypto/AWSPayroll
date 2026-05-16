@@ -4,6 +4,7 @@ const Leave = require("../models/leave-model");
 const Expense = require("../models/expense-model");
 const PayrollPolicy = require("../models/payroll-policy-model");
 const UserSalaries = require("../models/user-salary");
+const SalaryTaxRule = require("../models/salary-tax-rule-model");
 const Team = require("../models/team-model");
 const ErrorHandler = require('../utils/error-handler');
 const userService = require('../services/user-service');
@@ -19,6 +20,28 @@ const toNumber = value => {
 };
 
 const PF_AMOUNT_LIMIT = 1800;
+
+const defaultSalaryTaxRules = [
+  { label: 'Up to 4,00,000', fromAmount: 0, toAmount: 400000, ratePercent: 0, sortOrder: 1 },
+  { label: '4,00,001 to 8,00,000', fromAmount: 400000, toAmount: 800000, ratePercent: 5, sortOrder: 2 },
+  { label: '8,00,001 to 12,00,000', fromAmount: 800000, toAmount: 1200000, ratePercent: 10, sortOrder: 3 },
+  { label: '12,00,001 to 16,00,000', fromAmount: 1200000, toAmount: 1600000, ratePercent: 15, sortOrder: 4 },
+  { label: '16,00,001 to 20,00,000', fromAmount: 1600000, toAmount: 2000000, ratePercent: 20, sortOrder: 5 },
+  { label: '20,00,001 to 24,00,000', fromAmount: 2000000, toAmount: 2400000, ratePercent: 25, sortOrder: 6 },
+  { label: 'Above 24,00,000', fromAmount: 2400000, toAmount: null, ratePercent: 30, sortOrder: 7 },
+];
+
+const ensureDefaultSalaryTaxRules = async () => {
+  await Promise.all(
+    defaultSalaryTaxRules.map(rule =>
+      SalaryTaxRule.updateOne(
+        { label: rule.label, financialYear: 'FY 2025-26', regime: 'New Regime' },
+        { $setOnInsert: { ...rule, financialYear: 'FY 2025-26', regime: 'New Regime', isDefault: true } },
+        { upsert: true },
+      ),
+    ),
+  );
+};
 
 const getDateParts = (date = new Date()) => ({
   year: date.getFullYear(),
@@ -394,6 +417,7 @@ createUser = async (req, res) => {
       const { id } = req.params;
       const {
         name,
+        username,
         email,
         mobile,
         password,
@@ -425,6 +449,7 @@ createUser = async (req, res) => {
 
       const userData = {
         name: name || dbUser.name,
+        username: username || dbUser.username,
         email: email || dbUser.email,
         mobile: mobile || dbUser.mobile,
         type: type || dbUser.type,
@@ -1115,6 +1140,18 @@ autoMarkAttendanceForAll = async () => {
   }
 };
 
+    deleteEmployeeSalary = async (req, res, next) => {
+      try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid salary id'));
+        const deleted = await userService.deleteSalary({ _id: id });
+        if (!deleted) return next(ErrorHandler.notFound('Salary not found'));
+        res.json({ success: true, message: 'Salary deleted' });
+      } catch (error) {
+        res.json({ success: false, message: 'Delete Failed', error: error.message });
+      }
+    }
+
 
     viewSalary = async (req,res,next) => {
         try {
@@ -1135,6 +1172,57 @@ autoMarkAttendanceForAll = async () => {
         } catch (error) {
             res.json({success:false,error});
         }
+    }
+
+    getSalaryTaxRules = async (req, res, next) => {
+      await ensureDefaultSalaryTaxRules();
+      const filter = {};
+      if (req.query.status) filter.status = req.query.status;
+      const rules = await SalaryTaxRule.find(filter).sort({ sortOrder: 1, fromAmount: 1 });
+      res.json({ success: true, data: rules });
+    }
+
+    createSalaryTaxRule = async (req, res, next) => {
+      const data = {
+        label: String(req.body.label || '').trim(),
+        fromAmount: toNumber(req.body.fromAmount),
+        toAmount: req.body.toAmount === null || req.body.toAmount === '' ? null : toNumber(req.body.toAmount),
+        ratePercent: toNumber(req.body.ratePercent),
+        sortOrder: toNumber(req.body.sortOrder),
+        regime: req.body.regime || 'New Regime',
+        financialYear: req.body.financialYear || 'FY 2025-26',
+        status: req.body.status || 'active',
+      };
+      if (!data.label) return next(ErrorHandler.badRequest('Tax rule label is required'));
+      const rule = await SalaryTaxRule.create(data);
+      res.status(201).json({ success: true, message: 'Tax rule created', data: rule });
+    }
+
+    updateSalaryTaxRule = async (req, res, next) => {
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid tax rule id'));
+      const data = {
+        label: req.body.label,
+        fromAmount: req.body.fromAmount === undefined ? undefined : toNumber(req.body.fromAmount),
+        toAmount: req.body.toAmount === null || req.body.toAmount === '' ? null : req.body.toAmount === undefined ? undefined : toNumber(req.body.toAmount),
+        ratePercent: req.body.ratePercent === undefined ? undefined : toNumber(req.body.ratePercent),
+        sortOrder: req.body.sortOrder === undefined ? undefined : toNumber(req.body.sortOrder),
+        regime: req.body.regime,
+        financialYear: req.body.financialYear,
+        status: req.body.status,
+      };
+      Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+      const rule = await SalaryTaxRule.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+      if (!rule) return next(ErrorHandler.notFound('Tax rule not found'));
+      res.json({ success: true, message: 'Tax rule updated', data: rule });
+    }
+
+    deleteSalaryTaxRule = async (req, res, next) => {
+      const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid tax rule id'));
+      const rule = await SalaryTaxRule.findByIdAndDelete(id);
+      if (!rule) return next(ErrorHandler.notFound('Tax rule not found'));
+      res.json({ success: true, message: 'Tax rule deleted' });
     }
     
 

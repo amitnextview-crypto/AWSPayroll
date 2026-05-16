@@ -38,6 +38,7 @@ router.get('/counts',asyncMiddleware(teamController.getCounts));
 router.get('/all-users',asyncMiddleware(userController.getAllUsers));
 router.post('/update-employee-salary/',asyncMiddleware(userController.updateEmployeeSalary));
 router.post('/view-all-salary',asyncMiddleware(userController.viewSalary));
+router.delete('/salary/:id', asyncMiddleware(userController.deleteEmployeeSalary));
 router.post('/generate-monthly-salaries',asyncMiddleware(userController.generateMonthlySalaries));
 router.get('/user-salaries', asyncMiddleware(userController.viewUserSalaries));
 router.delete('/user/:id', asyncMiddleware(userController.deleteUser)); // ✅ keep after other user routes
@@ -51,6 +52,10 @@ router.get("/expenses", asyncMiddleware(expenseController.getExpenses));
 router.get("/expenses/:id", asyncMiddleware(expenseController.getExpenseById));
 router.patch("/expenses/:id", asyncMiddleware(expenseController.updateExpense));
 router.get("/calculate-current-month-salaries", asyncMiddleware(userController.calculateCurrentMonthSalaries));
+router.get('/salary-tax-rules', asyncMiddleware(userController.getSalaryTaxRules));
+router.post('/salary-tax-rules', asyncMiddleware(userController.createSalaryTaxRule));
+router.patch('/salary-tax-rules/:id', asyncMiddleware(userController.updateSalaryTaxRule));
+router.delete('/salary-tax-rules/:id', asyncMiddleware(userController.deleteSalaryTaxRule));
 
 
 

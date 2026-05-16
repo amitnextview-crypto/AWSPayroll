@@ -1,6 +1,11 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
-import {assignAdminSalary, getAdminEmployees} from '../../api/employeeApi';
+import {FileText} from 'lucide-react-native';
+import {
+  assignAdminSalary,
+  getAdminEmployees,
+  getSalaryTaxRules,
+} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
@@ -32,20 +37,66 @@ const emptySalary = {
 
 const numeric = value => Number(value || 0);
 const PF_AMOUNT_LIMIT = 1800;
+const STANDARD_DEDUCTION = 75000;
+const REBATE_LIMIT = 1200000;
 
-export const AdminAssignSalaryScreen = () => {
+const fallbackTaxRules = [
+  {label: 'Up to 4,00,000', fromAmount: 0, toAmount: 400000, ratePercent: 0},
+  {label: '4,00,001 to 8,00,000', fromAmount: 400000, toAmount: 800000, ratePercent: 5},
+  {label: '8,00,001 to 12,00,000', fromAmount: 800000, toAmount: 1200000, ratePercent: 10},
+  {label: '12,00,001 to 16,00,000', fromAmount: 1200000, toAmount: 1600000, ratePercent: 15},
+  {label: '16,00,001 to 20,00,000', fromAmount: 1600000, toAmount: 2000000, ratePercent: 20},
+  {label: '20,00,001 to 24,00,000', fromAmount: 2000000, toAmount: 2400000, ratePercent: 25},
+  {label: 'Above 24,00,000', fromAmount: 2400000, toAmount: null, ratePercent: 30},
+];
+
+export const AdminAssignSalaryScreen = ({navigation}) => {
   const [employees, setEmployees] = useState([]);
   const [employeeID, setEmployeeID] = useState('');
   const [form, setForm] = useState(emptySalary);
   const [search, setSearch] = useState('');
+  const [taxRules, setTaxRules] = useState(fallbackTaxRules);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
+  const loadTaxRules = async () => {
+    const response = await getSalaryTaxRules();
+    setTaxRules(response?.data?.length ? response.data : fallbackTaxRules);
+  };
+
   useEffect(() => {
-    getAdminEmployees({limit: 100})
-      .then(response => setEmployees(response?.data || []))
+    Promise.all([getAdminEmployees({limit: 100}), loadTaxRules()])
+      .then(([employeeResponse, taxResponse]) => {
+        setEmployees(employeeResponse?.data || []);
+      })
       .catch(err => setToast(err.message || 'Employees could not be loaded.'));
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadTaxRules().catch(err => setToast(err.message || 'TDS rules could not be loaded.'));
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const calculateAnnualTax = (annualGross, rules) => {
+    const taxableIncome = Math.max(annualGross - STANDARD_DEDUCTION, 0);
+    if (taxableIncome <= REBATE_LIMIT) {
+      return {taxableIncome, annualTax: 0, monthlyTDS: 0, taxBreakup: []};
+    }
+    const sortedRules = [...rules].sort((a, b) => numeric(a.fromAmount) - numeric(b.fromAmount));
+    const taxBreakup = sortedRules.map(rule => {
+      const from = numeric(rule.fromAmount);
+      const to = rule.toAmount === null || rule.toAmount === '' || rule.toAmount === undefined ? Infinity : numeric(rule.toAmount);
+      const taxableInSlab = Math.max(Math.min(taxableIncome, to) - from, 0);
+      const tax = (taxableInSlab * numeric(rule.ratePercent)) / 100;
+      return {...rule, taxableInSlab, tax};
+    }).filter(item => item.taxableInSlab > 0);
+    const taxBeforeCess = taxBreakup.reduce((sum, item) => sum + item.tax, 0);
+    const cess = taxBeforeCess * 0.04;
+    const annualTax = taxBeforeCess + cess;
+    return {taxableIncome, taxBreakup, taxBeforeCess, cess, annualTax, monthlyTDS: annualTax / 12};
+  };
 
   const totals = useMemo(() => {
     const overtimePay = numeric(form.overtimeHours) * numeric(form.overtimeRate);
@@ -64,10 +115,12 @@ export const AdminAssignSalaryScreen = () => {
     const pfEmployer = Math.min(pfEmployerRaw, PF_AMOUNT_LIMIT);
     const esiEmployee = (gross * numeric(form.esiEmployeePercent)) / 100;
     const esiEmployer = (gross * numeric(form.esiEmployerPercent)) / 100;
-    const tdsMonthly = numeric(form.tdsMonthlyOverride);
+    const annualGross = gross * 12;
+    const tax = calculateAnnualTax(annualGross, taxRules);
+    const tdsMonthly = numeric(form.tdsMonthlyOverride) || tax.monthlyTDS;
     const deductions = pfEmployee + esiEmployee + numeric(form.professionalTax) + numeric(form.loanRecovery) + tdsMonthly;
-    return {gross, deductions, net: Math.max(gross - deductions, 0), overtimePay, pfEmployee, pfEmployer, esiEmployee, esiEmployer, tdsMonthly};
-  }, [form]);
+    return {gross, deductions, net: Math.max(gross - deductions, 0), overtimePay, pfEmployee, pfEmployer, esiEmployee, esiEmployer, tdsMonthly, annualGross, tax};
+  }, [form, taxRules]);
 
   const selectedEmployee = employees.find(employee => (employee.id || employee._id) === employeeID);
   const filteredEmployees = useMemo(() => {
@@ -139,6 +192,9 @@ export const AdminAssignSalaryScreen = () => {
       <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
         <Text style={styles.title}>Assign Salary Structure</Text>
+        <View style={styles.actions}>
+          <AppButton icon={FileText} title="TDS Rules" variant="muted" onPress={() => navigation.navigate('AdminTdsRules')} />
+        </View>
         <Text style={styles.label}>Employee</Text>
         <AppTextInput label="Search employee" value={search} onChangeText={setSearch} />
         <FilterChips
@@ -150,8 +206,12 @@ export const AdminAssignSalaryScreen = () => {
           }))}
         />
         {selectedEmployee ? (
-          <Text style={styles.employeeId}>Selected ID: {selectedEmployee._id || selectedEmployee.id}</Text>
+          <Text style={styles.employeeId}>Selected ID: {selectedEmployee._id || selectedEmployee.id} / {selectedEmployee.email}</Text>
         ) : null}
+      </Card>
+
+      <Card>
+        <Text style={styles.title}>Salary Components</Text>
 
         <Text style={styles.section}>Earnings</Text>
         <View style={styles.twoCol}>
@@ -188,12 +248,22 @@ export const AdminAssignSalaryScreen = () => {
         <AppTextInput label="TDS Monthly" keyboardType="numeric" value={form.tdsMonthlyOverride} onChangeText={value => set('tdsMonthlyOverride', value)} />
 
         <View style={styles.summary}>
-          <Text style={styles.summaryText}>Gross: {formatCurrency(totals.gross)}</Text>
-          <Text style={styles.summaryText}>PF Employee: {formatCurrency(totals.pfEmployee)}</Text>
+          <Text style={styles.summaryText}>Monthly Gross: {formatCurrency(totals.gross)}</Text>
+          <Text style={styles.summaryText}>Annual Gross: {formatCurrency(totals.annualGross)}</Text>
+          <Text style={styles.summaryText}>Taxable Income: {formatCurrency(totals.tax.taxableIncome || 0)}</Text>
+          <Text style={styles.summaryText}>PF Employee: {formatCurrency(totals.pfEmployee)} (12% capped at {formatCurrency(PF_AMOUNT_LIMIT)})</Text>
+          <Text style={styles.summaryText}>PF Employer: {formatCurrency(totals.pfEmployer)} (company contribution)</Text>
           <Text style={styles.summaryText}>ESI Employee: {formatCurrency(totals.esiEmployee)}</Text>
-          <Text style={styles.summaryText}>Deductions: {formatCurrency(totals.deductions)}</Text>
+          <Text style={styles.summaryText}>ESI Employer: {formatCurrency(totals.esiEmployer)} (company contribution)</Text>
+          <Text style={styles.summaryText}>Professional Tax: {formatCurrency(numeric(form.professionalTax))}</Text>
+          <Text style={styles.summaryText}>Loan Recovery: {formatCurrency(numeric(form.loanRecovery))}</Text>
+          <Text style={styles.summaryText}>TDS Deduction Monthly: {formatCurrency(totals.tdsMonthly)}</Text>
+          <Text style={styles.summaryText}>TDS Annual: {formatCurrency(totals.tax.annualTax || 0)} including 4% cess</Text>
+          {totals.tax.taxBreakup?.map(item => (
+            <Text key={item.label} style={styles.summaryText}>{item.label}: {formatCurrency(item.taxableInSlab)} @ {item.ratePercent}% = {formatCurrency(item.tax)}</Text>
+          ))}
+          <Text style={styles.summaryText}>Total Deductions: {formatCurrency(totals.deductions)}</Text>
           <Text style={styles.net}>Net Salary: {formatCurrency(totals.net)}</Text>
-          <Text style={styles.summaryText}>Yearly Gross: {formatCurrency(totals.gross * 12)}</Text>
           <Text style={styles.summaryText}>Yearly Net: {formatCurrency(totals.net * 12)}</Text>
         </View>
         <AppButton loading={loading} onPress={submit} title="Assign Salary" />
@@ -209,6 +279,10 @@ const styles = StyleSheet.create({
   section: {color: colors.primary, fontSize: 14, fontWeight: '900', marginTop: spacing.lg},
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
+  meta: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
+  ruleRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.sm},
+  ruleLabel: {color: colors.text, fontWeight: '900'},
+  actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
   summary: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginVertical: spacing.md, padding: spacing.md},
   summaryText: {color: colors.textMuted, fontWeight: '800'},
   net: {color: colors.text, fontSize: 18, fontWeight: '900'},

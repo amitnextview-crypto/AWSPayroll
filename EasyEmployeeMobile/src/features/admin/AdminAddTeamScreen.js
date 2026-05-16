@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, StyleSheet, Text} from 'react-native';
 import {addAdminTeam, getAdminEmployees} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
@@ -14,6 +14,7 @@ export const AdminAddTeamScreen = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [leader, setLeader] = useState('');
+  const [leaderSearch, setLeaderSearch] = useState('');
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -23,6 +24,16 @@ export const AdminAddTeamScreen = () => {
       .then(response => setEmployees(response?.data || []))
       .catch(err => setToast(err.message || 'Employees could not be loaded.'));
   }, []);
+
+  const filteredEmployees = useMemo(() => {
+    const term = leaderSearch.trim().toLowerCase();
+    if (!term) return employees;
+    return employees.filter(employee =>
+      `${employee.name || ''} ${employee.email || ''} ${employee.username || ''} ${employee.employeeCode || ''} ${employee.id || employee._id || ''}`
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [employees, leaderSearch]);
 
   const submit = async () => {
     if (!name.trim()) {
@@ -56,12 +67,17 @@ export const AdminAddTeamScreen = () => {
         <AppTextInput label="Team name" value={name} onChangeText={setName} />
         <AppTextInput label="Description" value={description} onChangeText={setDescription} multiline />
         <Text style={styles.label}>Team Leader</Text>
+        <AppTextInput
+          label="Search by letter, name, email, or ID"
+          value={leaderSearch}
+          onChangeText={setLeaderSearch}
+        />
         <FilterChips
           value={leader}
           onChange={setLeader}
-          items={employees.map(employee => ({
+          items={filteredEmployees.map(employee => ({
             value: employee.id || employee._id,
-            label: `${employee.name || employee.username} (${employee.department || 'Team'})`,
+            label: `${employee.name || employee.username} (${employee.email || employee.employeeCode || 'Team'})`,
           }))}
         />
         <Text style={styles.hint}>Selected employee is automatically promoted into the Leaders tab.</Text>

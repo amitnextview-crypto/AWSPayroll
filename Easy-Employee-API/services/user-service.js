@@ -60,14 +60,16 @@ class UserService {
   assignSalary = async (data) => UserSalaryModel.create(data);
 
   findSalary = async (data) =>
-    UserSalaryModel.findOne(data).populate('employeeID', 'name email username mobile type designation address profile');
+    UserSalaryModel.findOne(data).populate('employeeID', 'name email username employeeCode mobile type designation department address profile');
 
   findAllSalary = async (data = {}) =>
-    UserSalaryModel.find(data).populate('employeeID', 'name email username mobile type designation address profile');
+    UserSalaryModel.find(data).populate('employeeID', 'name email username employeeCode mobile type designation department address profile');
 
 updateEmployeeSalary = async (data, updatedSalary) => {
   return await UserSalaryModel.findOneAndUpdate(data, updatedSalary, { new: true });
 };
+
+  deleteSalary = async (filter) => UserSalaryModel.findOneAndDelete(filter);
 
 
 

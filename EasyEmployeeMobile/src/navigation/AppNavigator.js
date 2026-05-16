@@ -28,6 +28,7 @@ import {AdminPoliciesScreen} from '../features/admin/AdminPoliciesScreen';
 import {AdminSalaryScreen} from '../features/admin/AdminSalaryScreen';
 import {AdminSettingsScreen} from '../features/admin/AdminSettingsScreen';
 import {AdminTeamsScreen} from '../features/admin/AdminTeamsScreen';
+import {AdminTdsRulesScreen} from '../features/admin/AdminTdsRulesScreen';
 import {AttendanceScreen} from '../features/attendance/AttendanceScreen';
 import {InfoScreen} from '../features/common/InfoScreen';
 import {ExpenseScreen} from '../features/expenses/ExpenseScreen';
@@ -112,16 +113,17 @@ const AdminStack = () => (
   <ThemedStack Navigator={AdminStackNavigator}>
     <AdminStackNavigator.Screen name="AdminTabs" component={AdminTabs} options={{headerShown: false}} />
     <AdminStackNavigator.Screen name="Dashboard" component={AdminHomeScreen} />
-    <AdminStackNavigator.Screen name="AdminPeople" component={AdminPeopleScreen} options={{title: 'People'}} />
+    <AdminStackNavigator.Screen name="AdminPeople" component={AdminPeopleScreen} options={{title: 'Employees'}} />
     <AdminStackNavigator.Screen name="AdminTeams" component={AdminTeamsScreen} options={{title: 'Teams'}} />
     <AdminStackNavigator.Screen name="AdminAttendance" component={AdminAttendanceScreen} options={{title: 'Attendance'}} />
     <AdminStackNavigator.Screen name="AdminLeaves" component={AdminLeavesScreen} options={{title: 'Leaves'}} />
     <AdminStackNavigator.Screen name="AdminExpenses" component={AdminExpensesScreen} options={{title: 'Expenses'}} />
     <AdminStackNavigator.Screen name="AdminAssignSalary" component={AdminAssignSalaryScreen} options={{title: 'Assign Salary'}} />
+    <AdminStackNavigator.Screen name="AdminTdsRules" component={AdminTdsRulesScreen} options={{title: 'TDS Rules'}} />
     <AdminStackNavigator.Screen name="AdminSalaries" component={AdminSalaryScreen} options={{title: 'Salaries'}} />
     <AdminStackNavigator.Screen name="AdminPolicies" component={AdminPoliciesScreen} options={{title: 'Payroll Policies'}} />
     <AdminStackNavigator.Screen name="AdminSettings" component={AdminSettingsScreen} options={{title: 'Settings'}} />
-    <AdminStackNavigator.Screen name="AdminAddUser" component={AdminAddUserScreen} options={{title: 'Add User'}} />
+    <AdminStackNavigator.Screen name="AdminAddUser" component={AdminAddUserScreen} options={{title: 'Add Employee'}} />
     <AdminStackNavigator.Screen name="AdminAddTeam" component={AdminAddTeamScreen} options={{title: 'Add Team'}} />
     <AdminStackNavigator.Screen name="Info" component={InfoScreen} />
   </ThemedStack>

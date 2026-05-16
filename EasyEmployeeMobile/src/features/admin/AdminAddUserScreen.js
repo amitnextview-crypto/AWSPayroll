@@ -1,6 +1,6 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
-import {addAdminUser} from '../../api/employeeApi';
+import {addAdminUser, updateAdminUser} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
@@ -23,8 +23,9 @@ const workOptions = [
   {label: 'Hybrid', value: 'Hybrid'},
 ];
 
+const makeTestingForm = () => {
 const testSuffix = Date.now().toString().slice(-5);
-const initialForm = {
+return {
   name: 'Test Employee',
   username: `EMP${testSuffix}`,
   employeeCode: `EMP-${testSuffix}`,
@@ -48,9 +49,38 @@ const initialForm = {
   emergencyContactPhone: '9876500000',
   emergencyContactRelation: 'Friend',
 };
+};
 
-export const AdminAddUserScreen = () => {
-  const [form, setForm] = useState(initialForm);
+const formFromUser = user => ({
+  ...makeTestingForm(),
+  name: user?.name || '',
+  username: user?.username || '',
+  employeeCode: user?.employeeCode || '',
+  email: user?.email || '',
+  mobile: user?.mobile || '',
+  password: '',
+  type: String(user?.type || 'employee').toLowerCase(),
+  department: user?.department || '',
+  designation: user?.designation || '',
+  workType: user?.workType || 'Onsite',
+  date: user?.date || formatApiDate(),
+  address: user?.address || '',
+  panNumber: user?.panNumber || '',
+  aadhaarNumber: user?.aadhaarNumber || '',
+  bankName: user?.bankName || '',
+  accountNumber: user?.accountNumber || '',
+  ifscCode: user?.ifscCode || '',
+  uan: user?.uan || '',
+  esi: user?.esi || '',
+  emergencyContactName: user?.emergencyContact?.name || '',
+  emergencyContactPhone: user?.emergencyContact?.phone || '',
+  emergencyContactRelation: user?.emergencyContact?.relation || '',
+});
+
+export const AdminAddUserScreen = ({route, navigation}) => {
+  const editingUser = route.params?.user;
+  const isEdit = Boolean(editingUser?.id || editingUser?._id);
+  const [form, setForm] = useState(isEdit ? formFromUser(editingUser) : makeTestingForm());
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [showErrors, setShowErrors] = useState(false);
@@ -62,13 +92,18 @@ export const AdminAddUserScreen = () => {
     if (!form.username.trim()) next.username = 'Employee ID is required.';
     if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Valid email is required.';
     if (!/^\d{10,13}$/.test(form.mobile)) next.mobile = 'Valid phone is required.';
-    if (form.password.length < 6) next.password = 'Password must be at least 6 characters.';
+    if ((!isEdit || form.password) && form.password.length < 6) next.password = 'Password must be at least 6 characters.';
     if (!form.department.trim()) next.department = 'Department is required.';
     if (!form.designation.trim()) next.designation = 'Designation is required.';
     if (form.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(form.panNumber.toUpperCase())) next.panNumber = 'PAN format is invalid.';
     if (form.aadhaarNumber && !/^\d{12}$/.test(form.aadhaarNumber)) next.aadhaarNumber = 'Aadhaar must be 12 digits.';
     return next;
-  }, [form]);
+  }, [form, isEdit]);
+
+  useEffect(() => {
+    setForm(isEdit ? formFromUser(editingUser) : makeTestingForm());
+    setShowErrors(false);
+  }, [editingUser, isEdit]);
 
   const submit = async () => {
     setShowErrors(true);
@@ -79,9 +114,14 @@ export const AdminAddUserScreen = () => {
     setLoading(true);
     setToast('');
     try {
-      const response = await addAdminUser({...form, panNumber: form.panNumber.toUpperCase()});
-      Alert.alert('Employee', response?.message || 'Employee created.');
-      setForm(initialForm);
+      const payload = {...form, panNumber: form.panNumber.toUpperCase()};
+      if (isEdit && !payload.password) delete payload.password;
+      const response = isEdit
+        ? await updateAdminUser(editingUser.id || editingUser._id, payload)
+        : await addAdminUser(payload);
+      Alert.alert('Employee', response?.message || (isEdit ? 'Employee updated.' : 'Employee created.'));
+      if (isEdit) navigation?.goBack();
+      else setForm(makeTestingForm());
       setShowErrors(false);
     } catch (err) {
       setToast(err.message || 'User could not be created.');
@@ -94,7 +134,7 @@ export const AdminAddUserScreen = () => {
     <Screen>
       <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
-        <Text style={styles.title}>Add Employee</Text>
+        <Text style={styles.title}>{isEdit ? 'Edit Employee' : 'Add Employee'}</Text>
         <Text style={styles.section}>Account</Text>
         <AppTextInput label="Full Name" error={showErrors ? errors.name : undefined} value={form.name} onChangeText={value => set('name', value)} />
         <View style={styles.twoCol}>
@@ -104,7 +144,7 @@ export const AdminAddUserScreen = () => {
         <AppTextInput label="Email" autoCapitalize="none" keyboardType="email-address" error={showErrors ? errors.email : undefined} value={form.email} onChangeText={value => set('email', value)} />
         <View style={styles.twoCol}>
           <AppTextInput label="Phone" keyboardType="phone-pad" error={showErrors ? errors.mobile : undefined} value={form.mobile} onChangeText={value => set('mobile', value)} style={styles.flex} />
-          <AppTextInput label="Password" secureTextEntry error={showErrors ? errors.password : undefined} value={form.password} onChangeText={value => set('password', value)} style={styles.flex} />
+          <AppTextInput label={isEdit ? 'New Password (optional)' : 'Password'} secureTextEntry error={showErrors ? errors.password : undefined} value={form.password} onChangeText={value => set('password', value)} style={styles.flex} />
         </View>
         <FilterChips items={roleOptions} value={form.type} onChange={value => set('type', value)} />
 
@@ -140,7 +180,7 @@ export const AdminAddUserScreen = () => {
         </View>
 
         <View style={styles.submitWrap}>
-          <AppButton loading={loading} onPress={submit} title="Create Employee" />
+          <AppButton loading={loading} onPress={submit} title={isEdit ? 'Update Employee' : 'Create Employee'} />
         </View>
       </Card>
     </Screen>
