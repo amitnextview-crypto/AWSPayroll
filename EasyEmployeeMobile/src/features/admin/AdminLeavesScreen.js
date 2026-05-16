@@ -1,11 +1,10 @@
 import React, {useEffect, useState} from 'react';
-import {RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {Check, X} from 'lucide-react-native';
 import {getAdminLeaves, updateAdminLeave} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
-import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {ToastBanner} from '../../components/ToastBanner';
@@ -72,7 +71,19 @@ export const AdminLeavesScreen = () => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
-      <FilterChips items={filters} value={status} onChange={setStatus} />
+      <View style={styles.filterRow}>
+        {filters.map(item => {
+          const active = status === item.value;
+          return (
+            <Pressable
+              key={item.value}
+              onPress={() => setStatus(item.value)}
+              style={[styles.filterButton, active ? styles.filterActive : styles.filterInactive]}>
+              <Text style={[styles.filterText, active ? styles.filterTextActive : styles.filterTextInactive]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <ToastBanner message={toast} type={toast.includes('approved') || toast.includes('rejected') ? 'success' : 'error'} onHide={() => setToast('')} />
       {items.map(item => {
         const id = item.id || item._id;
@@ -83,6 +94,7 @@ export const AdminLeavesScreen = () => {
               <StatusPill value={item.adminResponse || 'Pending'} />
             </View>
             <Text style={styles.meta}>{item.applicantEmail || '-'}</Text>
+            <Text style={styles.meta}>Status: {item.adminResponse || 'Pending'}</Text>
             <Text style={styles.meta}>Type: {item.type || item.leaveType || '-'}</Text>
             <Text style={styles.meta}>From: {item.from || item.startDate || '-'}</Text>
             <Text style={styles.meta}>To: {item.to || item.endDate || '-'}</Text>
@@ -111,6 +123,13 @@ const styles = StyleSheet.create({
   heading: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between'},
   title: {color: colors.text, flex: 1, fontSize: 17, fontWeight: '900'},
   meta: {color: colors.textMuted, marginTop: spacing.xs},
+  filterRow: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
+  filterButton: {alignItems: 'center', borderRadius: 8, borderWidth: 1, height: 40, justifyContent: 'center', minWidth: 86, paddingHorizontal: spacing.sm},
+  filterActive: {backgroundColor: colors.primary, borderColor: colors.primary},
+  filterInactive: {backgroundColor: colors.surfaceMuted, borderColor: colors.border},
+  filterText: {fontSize: 13, fontWeight: '900'},
+  filterTextActive: {color: colors.surface},
+  filterTextInactive: {color: colors.text},
   rejectText: {color: colors.danger, fontWeight: '800', marginTop: spacing.sm},
   rejectBox: {gap: spacing.sm, marginTop: spacing.md},
   actions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},

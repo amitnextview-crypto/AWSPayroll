@@ -3,7 +3,7 @@ import {Alert, StyleSheet, Text, View} from 'react-native';
 import {FileText} from 'lucide-react-native';
 import {
   assignAdminSalary,
-  getAdminEmployees,
+  getAdminAllUsers,
   getSalaryTaxRules,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
@@ -39,6 +39,7 @@ const numeric = value => Number(value || 0);
 const PF_AMOUNT_LIMIT = 1800;
 const STANDARD_DEDUCTION = 75000;
 const REBATE_LIMIT = 1200000;
+const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
 
 const fallbackTaxRules = [
   {label: 'Up to 4,00,000', fromAmount: 0, toAmount: 400000, ratePercent: 0},
@@ -65,9 +66,9 @@ export const AdminAssignSalaryScreen = ({navigation}) => {
   };
 
   useEffect(() => {
-    Promise.all([getAdminEmployees({limit: 100}), loadTaxRules()])
+    Promise.all([getAdminAllUsers(), loadTaxRules()])
       .then(([employeeResponse, taxResponse]) => {
-        setEmployees(employeeResponse?.data || []);
+        setEmployees((employeeResponse?.data || []).filter(isWorkforce));
       })
       .catch(err => setToast(err.message || 'Employees could not be loaded.'));
   }, []);

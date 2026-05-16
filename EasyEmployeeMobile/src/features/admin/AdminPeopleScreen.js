@@ -15,10 +15,20 @@ import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
+const roleOptions = [
+  {label: 'All', value: ''},
+  {label: 'Employee', value: 'employee'},
+  {label: 'Leader', value: 'leader'},
+];
+
+const roleOf = user => String(user?.type || '').toLowerCase();
+const isWorkforce = user => ['employee', 'leader'].includes(roleOf(user));
+
 export const AdminPeopleScreen = ({navigation}) => {
   const [items, setItems] = useState([]);
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -27,7 +37,7 @@ export const AdminPeopleScreen = ({navigation}) => {
     setToast('');
     try {
       const response = await getAdminAllUsers();
-      setItems(response?.data || []);
+      setItems((response?.data || []).filter(isWorkforce));
     } catch (err) {
       setToast(err.message || 'Employees could not be loaded.');
     } finally {
@@ -41,11 +51,14 @@ export const AdminPeopleScreen = ({navigation}) => {
 
   const visibleItems = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return items;
     return items.filter(item =>
-      `${item.name || ''} ${item.email || ''}`.toLowerCase().includes(term),
+      (!roleFilter || roleOf(item) === roleFilter) &&
+      (!term ||
+        `${item.name || ''} ${item.email || ''} ${item.username || ''} ${item.employeeCode || ''} ${item.id || item._id || ''}`
+          .toLowerCase()
+          .includes(term)),
     );
-  }, [items, search]);
+  }, [items, roleFilter, search]);
 
   const confirmDelete = user => {
     Alert.alert('Delete employee', `Delete ${user?.name || 'this employee'}?`, [
@@ -84,7 +97,17 @@ export const AdminPeopleScreen = ({navigation}) => {
 
       <Card>
         <Text style={styles.title}>Employees</Text>
-        <AppTextInput label="Search by name or email" value={searchDraft} onChangeText={setSearchDraft} />
+        <View style={styles.roleTabs}>
+          {roleOptions.map(option => (
+            <AppButton
+              key={option.value}
+              title={option.label}
+              variant={roleFilter === option.value ? 'primary' : 'muted'}
+              onPress={() => setRoleFilter(option.value)}
+            />
+          ))}
+        </View>
+        <AppTextInput label="Search by name, email, ID, code, or letter" value={searchDraft} onChangeText={setSearchDraft} />
         <View style={styles.actions}>
           <AppButton title="Apply Filter" loading={loading} onPress={() => setSearch(searchDraft)} />
           <AppButton title="Clear" variant="muted" onPress={() => { setSearchDraft(''); setSearch(''); }} />
@@ -139,5 +162,6 @@ const styles = StyleSheet.create({
   details: {gap: spacing.xs, marginTop: spacing.sm},
   count: {color: colors.textMuted, fontWeight: '800'},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
+  roleTabs: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md},
   empty: {color: colors.textMuted, textAlign: 'center'},
 });

@@ -4,7 +4,7 @@ import {Edit3, Plus, Save, Trash2, X} from 'lucide-react-native';
 import {
   assignAdminSalary,
   deleteAdminSalary,
-  getAdminEmployees,
+  getAdminAllUsers,
   getAdminSalaries,
   updateAdminSalary,
 } from '../../api/employeeApi';
@@ -38,6 +38,7 @@ const emptyForm = {
 
 const numeric = value => Number(value || 0);
 const idOf = item => String(item?.id || item?._id || '');
+const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
 const salaryEmployeeId = salary => {
   const employee = salary?.employeeID || salary?.employee || salary?.user;
   return typeof employee === 'object' ? idOf(employee) : String(employee || '');
@@ -80,10 +81,10 @@ export const AdminSalaryScreen = () => {
     setToast('');
     try {
       const [employeeResponse, salaryResponse] = await Promise.all([
-        getAdminEmployees({limit: 100}),
+        getAdminAllUsers(),
         getAdminSalaries({}),
       ]);
-      setEmployees(employeeResponse?.data || []);
+      setEmployees((employeeResponse?.data || []).filter(isWorkforce));
       setSalaries(salaryResponse?.data || salaryResponse?.salaries || []);
     } catch (err) {
       setToast(err.message || 'Salaries could not be loaded.');

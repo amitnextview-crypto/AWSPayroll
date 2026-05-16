@@ -47,7 +47,9 @@ async getExpenses(req, res) {
     if (adminResponse) filter.adminResponse = adminResponse;
     if (appliedDate) filter.appliedDate = appliedDate;
 
-    const data = await Expense.find(filter).sort({ createdAt: -1 });
+    const data = await Expense.find(filter)
+      .populate("employeeID", "name email username employeeCode type department designation")
+      .sort({ createdAt: -1 });
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error fetching expenses:", error);
