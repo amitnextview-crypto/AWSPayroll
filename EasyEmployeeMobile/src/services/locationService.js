@@ -90,14 +90,11 @@ export const verifyOfficeLocation = async workType => {
   });
 
   return {
-    allowed: distanceMeters <= OFFICE_LOCATION.radiusMeters,
+    allowed: true,
     distanceMeters,
     accuracy: coords.accuracy,
     latitude: coords.latitude,
     longitude: coords.longitude,
-    message:
-      distanceMeters <= OFFICE_LOCATION.radiusMeters
-        ? 'Inside office radius.'
-        : 'You are outside the office attendance radius.',
+    message: 'Location captured. Office radius will be verified by server.',
   };
 };

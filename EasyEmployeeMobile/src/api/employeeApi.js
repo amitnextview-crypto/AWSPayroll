@@ -32,6 +32,10 @@ export const deleteExpense = id => client.delete(`/employee/expenses/${id}`);
 
 export const getAdminCounts = () => client.get('/admin/counts');
 export const getAdminDashboard = () => client.get('/admin/dashboard');
+export const getOfficeLocations = () => client.get('/admin/office-locations');
+export const addOfficeLocation = data => client.post('/admin/office-locations', data);
+export const updateOfficeLocation = (id, data) => client.patch(`/admin/office-locations/${id}`, data);
+export const deleteOfficeLocation = id => client.delete(`/admin/office-locations/${id}`);
 export const getAdminEmployees = params => client.get('/admin/employees', {params});
 export const getAdminAdmins = params => client.get('/admin/admins', {params});
 export const getAdminLeaders = params => client.get('/admin/leaders', {params});

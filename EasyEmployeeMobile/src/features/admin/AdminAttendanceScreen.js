@@ -149,7 +149,8 @@ export const AdminAttendanceScreen = ({route}) => {
       });
     }
     const selectedDate = Number(dateFilter || 0);
-    return selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
+    const visibleRows = selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
+    return visibleRows.sort((a, b) => b.date - a.date);
   }, [dateFilter, leaves, month, records, selectedEmployee, today, year]);
 
   const startEdit = row => {

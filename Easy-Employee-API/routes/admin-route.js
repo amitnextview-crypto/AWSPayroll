@@ -10,6 +10,10 @@ router.post("/payslip/send-email", sendPayslipEmail);
 
 // existing imports at top
 router.get('/dashboard', asyncMiddleware(userController.getAdminDashboard));
+router.get('/office-locations', asyncMiddleware(userController.getOfficeLocations));
+router.post('/office-locations', asyncMiddleware(userController.createOfficeLocation));
+router.patch('/office-locations/:id', asyncMiddleware(userController.updateOfficeLocation));
+router.delete('/office-locations/:id', asyncMiddleware(userController.deleteOfficeLocation));
 router.post('/view-employee-attendance',asyncMiddleware(userController.viewEmployeeAttendance));
 router.post('/view-leave-applications',asyncMiddleware(userController.viewLeaveApplications));
 router.post('/update-leave/:id', asyncMiddleware(userController.updateLeaveApplication)); // <-- ADD THIS

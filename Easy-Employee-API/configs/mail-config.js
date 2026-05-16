@@ -1,14 +1,17 @@
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-  service: "gmail", // ✅ Gmail ke liye direct service use karo
+  service: "gmail",
   auth: {
-    user: process.env.SMTP_USER, // e.g. amitmaddheshiya099@gmail.com
-    pass: process.env.SMTP_PASS, // Gmail app password (16-digit)
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // ✅ Ignore self-signed SSL
+    rejectUnauthorized: false,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
 });
 
 module.exports = transporter;

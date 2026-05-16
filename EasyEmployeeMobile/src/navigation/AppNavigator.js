@@ -23,6 +23,7 @@ import {AdminHomeScreen} from '../features/admin/AdminHomeScreen';
 import {AdminExpensesScreen} from '../features/admin/AdminExpensesScreen';
 import {AdminLeavesScreen} from '../features/admin/AdminLeavesScreen';
 import {AdminMenuScreen} from '../features/admin/AdminMenuScreen';
+import {AdminOfficeLocationScreen} from '../features/admin/AdminOfficeLocationScreen';
 import {AdminPeopleScreen} from '../features/admin/AdminPeopleScreen';
 import {AdminPoliciesScreen} from '../features/admin/AdminPoliciesScreen';
 import {AdminSalaryScreen} from '../features/admin/AdminSalaryScreen';
@@ -118,6 +119,7 @@ const AdminStack = () => (
     <AdminStackNavigator.Screen name="AdminAttendance" component={AdminAttendanceScreen} options={{title: 'Attendance'}} />
     <AdminStackNavigator.Screen name="AdminLeaves" component={AdminLeavesScreen} options={{title: 'Leaves'}} />
     <AdminStackNavigator.Screen name="AdminExpenses" component={AdminExpensesScreen} options={{title: 'Expenses'}} />
+    <AdminStackNavigator.Screen name="AdminOfficeLocation" component={AdminOfficeLocationScreen} options={{title: 'Office Location'}} />
     <AdminStackNavigator.Screen name="AdminAssignSalary" component={AdminAssignSalaryScreen} options={{title: 'Assign Salary'}} />
     <AdminStackNavigator.Screen name="AdminTdsRules" component={AdminTdsRulesScreen} options={{title: 'TDS Rules'}} />
     <AdminStackNavigator.Screen name="AdminSalaries" component={AdminSalaryScreen} options={{title: 'Salaries'}} />

@@ -5,6 +5,7 @@ const Expense = require("../models/expense-model");
 const PayrollPolicy = require("../models/payroll-policy-model");
 const UserSalaries = require("../models/user-salary");
 const SalaryTaxRule = require("../models/salary-tax-rule-model");
+const OfficeLocation = require("../models/office-location-model");
 const Team = require("../models/team-model");
 const ErrorHandler = require('../utils/error-handler');
 const userService = require('../services/user-service');
@@ -138,13 +139,22 @@ const normalizeSalaryPayload = data => {
   };
 };
 
-const OFFICE_LOCATION = {
-  latitude: Number(process.env.OFFICE_LATITUDE || 23.0361925),
-  longitude: Number(process.env.OFFICE_LONGITUDE || 72.5133962),
-  radiusMeters: Number(process.env.OFFICE_RADIUS_METERS || 300),
+const DEFAULT_OFFICE_LOCATION = {
+  officeName: process.env.OFFICE_NAME || 'Amit Web Solution Company',
+  latitude: Number(process.env.OFFICE_LATITUDE || 23.036245),
+  longitude: Number(process.env.OFFICE_LONGITUDE || 72.513106),
+  radiusMeters: Number(process.env.OFFICE_RADIUS_METERS || 100),
 };
 
-const distanceInMeters = (from, to = OFFICE_LOCATION) => {
+const getActiveOfficeLocation = async () => {
+  let location = await OfficeLocation.findOne({ status: 'active' }).sort({ updatedAt: -1 });
+  if (!location) {
+    location = await OfficeLocation.create({ ...DEFAULT_OFFICE_LOCATION, status: 'active' });
+  }
+  return location;
+};
+
+const distanceInMeters = (from, to = DEFAULT_OFFICE_LOCATION) => {
   const toRadians = value => (value * Math.PI) / 180;
   const earthRadiusMeters = 6371000;
   const dLat = toRadians(to.latitude - from.latitude);
@@ -174,11 +184,12 @@ const validateAttendanceLocation = async (employeeID, latitude, longitude) => {
     return { valid: false, message: "Office location verification is required" };
   }
 
-  const distanceMeters = distanceInMeters({ latitude: lat, longitude: lng });
-  if (distanceMeters > OFFICE_LOCATION.radiusMeters) {
+  const officeLocation = await getActiveOfficeLocation();
+  const distanceMeters = distanceInMeters({ latitude: lat, longitude: lng }, officeLocation);
+  if (distanceMeters > officeLocation.radiusMeters) {
     return {
       valid: false,
-      message: `You are outside the office radius (${Math.round(distanceMeters)}m away)`,
+      message: `You are outside ${officeLocation.officeName} radius (${Math.round(distanceMeters)}m away)`,
     };
   }
 
@@ -201,6 +212,71 @@ const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters
 
 
 class UserController {
+  getOfficeLocations = async (req, res, next) => {
+    const locations = await OfficeLocation.find({}).sort({ status: 1, updatedAt: -1 });
+    if (!locations.length) {
+      const location = await OfficeLocation.create({ ...DEFAULT_OFFICE_LOCATION, status: 'active' });
+      return res.json({ success: true, data: [location] });
+    }
+    res.json({ success: true, data: locations });
+  }
+
+  createOfficeLocation = async (req, res, next) => {
+    const data = {
+      officeName: String(req.body.officeName || '').trim(),
+      latitude: Number(req.body.latitude),
+      longitude: Number(req.body.longitude),
+      radiusMeters: Number(req.body.radiusMeters || 100),
+      status: req.body.status || 'active',
+    };
+    if (!data.officeName) return next(ErrorHandler.badRequest('Office name is required'));
+    if (!Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) {
+      return next(ErrorHandler.badRequest('Valid office latitude and longitude are required'));
+    }
+    if (!Number.isFinite(data.radiusMeters) || data.radiusMeters <= 0) {
+      return next(ErrorHandler.badRequest('Allowed radius must be greater than 0'));
+    }
+    if (data.status === 'active') {
+      await OfficeLocation.updateMany({}, { status: 'inactive' });
+    }
+    const location = await OfficeLocation.create(data);
+    res.status(201).json({ success: true, message: 'Office location saved', data: location });
+  }
+
+  updateOfficeLocation = async (req, res, next) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid office location id'));
+    const data = {
+      officeName: req.body.officeName === undefined ? undefined : String(req.body.officeName || '').trim(),
+      latitude: req.body.latitude === undefined ? undefined : Number(req.body.latitude),
+      longitude: req.body.longitude === undefined ? undefined : Number(req.body.longitude),
+      radiusMeters: req.body.radiusMeters === undefined ? undefined : Number(req.body.radiusMeters),
+      status: req.body.status,
+    };
+    Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+    if (data.officeName === '') return next(ErrorHandler.badRequest('Office name is required'));
+    if ((data.latitude !== undefined && !Number.isFinite(data.latitude)) || (data.longitude !== undefined && !Number.isFinite(data.longitude))) {
+      return next(ErrorHandler.badRequest('Valid office latitude and longitude are required'));
+    }
+    if (data.radiusMeters !== undefined && (!Number.isFinite(data.radiusMeters) || data.radiusMeters <= 0)) {
+      return next(ErrorHandler.badRequest('Allowed radius must be greater than 0'));
+    }
+    if (data.status === 'active') {
+      await OfficeLocation.updateMany({ _id: { $ne: id } }, { status: 'inactive' });
+    }
+    const location = await OfficeLocation.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    if (!location) return next(ErrorHandler.notFound('Office location not found'));
+    res.json({ success: true, message: 'Office location updated', data: location });
+  }
+
+  deleteOfficeLocation = async (req, res, next) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid office location id'));
+    const deleted = await OfficeLocation.findByIdAndDelete(id);
+    if (!deleted) return next(ErrorHandler.notFound('Office location not found'));
+    res.json({ success: true, message: 'Office location deleted' });
+  }
+
   calculateCurrentMonthSalaries = async (req, res) => {
   try {
     const currentDate = new Date();
