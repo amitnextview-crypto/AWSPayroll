@@ -32,7 +32,7 @@ export const AdminMenuScreen = ({navigation}) => {
           {label: 'Teams', caption: 'Team records and bulk members', icon: Building2, onPress: () => navigation.navigate('AdminTeams')},
           {label: 'Assign Salary', caption: 'Assign employee salary', icon: WalletCards, onPress: () => navigation.navigate('AdminAssignSalary')},
           {label: 'Salaries', caption: 'Salary records', icon: IndianRupee, onPress: () => navigation.navigate('AdminSalaries')},
-          {label: 'Monthly Salaries', caption: 'Monthly payroll records', icon: IndianRupee, onPress: () => navigation.navigate('AdminSalaries')},
+          {label: 'Monthly Salaries', caption: 'Monthly payroll records', icon: IndianRupee, onPress: () => navigation.navigate('AdminMonthlySalaries')},
           {label: 'Leaves', caption: 'Approve or reject leave', icon: FileCheck, onPress: () => navigation.navigate('AdminLeaves')},
           {label: 'Expenses', caption: 'Approve or reject expense', icon: ReceiptText, onPress: () => navigation.navigate('AdminExpenses')},
           {label: 'Office Location', caption: 'Check-in radius and office coordinates', icon: MapPin, onPress: () => navigation.navigate('AdminOfficeLocation')},

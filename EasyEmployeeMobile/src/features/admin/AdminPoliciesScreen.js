@@ -32,11 +32,10 @@ const masterRuleTemplate = {
     'Controls monthly employee and leader salary from attendance, approved leave, weekly off, and paid holidays.',
   status: 'active',
   rules: [
-    {label: 'Salary Basis Days', value: 'Full Month', note: 'Use Full Month or Fixed Days'},
-    {label: 'Fixed Paid Days', value: '26', note: 'Used when salary basis is Fixed Days'},
+    {label: 'Fixed Paid Days', value: '26', note: '26 for Sunday off, 22 for Saturday and Sunday off'},
     {label: 'Salary Cycle Start Day', value: '1', note: 'Monthly cycle start date'},
     {label: 'Salary Cycle End Day', value: '31', note: 'Use 31 for month end'},
-    {label: 'Weekly Off Days', value: 'Sunday', note: 'Comma separated days'},
+    {label: 'Weekly Off Days', value: 'Sunday', note: 'Use Sunday or Saturday, Sunday. Paid working days are calculated automatically.'},
     {label: 'Approved Leave Paid', value: 'Yes', note: 'Approved leave salary paid'},
     {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
     {label: 'Paid Holiday Names', value: 'Republic Day, Independence Day, Gandhi Jayanti, Diwali, Holi, Makar Sankranti', note: 'Reference names'},
@@ -48,11 +47,11 @@ const masterRuleTemplate = {
 };
 
 const quickRules = [
+  {label: 'Fixed Paid Days', value: '26', note: '26 for Sunday off, 22 for Saturday and Sunday off'},
   {label: 'Weekly Off Days', value: 'Sunday', note: 'Sunday or Saturday, Sunday'},
   {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
   {label: 'Approved Leave Paid', value: 'Yes', note: 'Yes or No'},
-  {label: 'Salary Basis Days', value: 'Full Month', note: 'Full Month or Fixed Days'},
-  {label: 'Fixed Paid Days', value: '26', note: '26, 30, or company rule'},
+  {label: 'Minimum Full Day Hours', value: '7', note: 'Below this becomes half day'},
 ];
 
 const statusItems = [
@@ -291,7 +290,7 @@ export const AdminPoliciesScreen = () => {
               ))}
             </View>
           ) : (
-            <Text style={styles.meta}>Create the master rule to control 26 day, 30 day, full month, leave, holiday, and weekly off salary rules.</Text>
+            <Text style={styles.meta}>Create the master rule to control salary cycle, weekly off days, leave, holiday, half day, and expense salary rules.</Text>
           )}
         </Card>
       ) : null}

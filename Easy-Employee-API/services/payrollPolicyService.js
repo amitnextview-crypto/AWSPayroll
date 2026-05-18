@@ -8,7 +8,6 @@ const defaultPolicies = [
     isDefault: true,
     description: 'Controls monthly employee and leader salary calculation from attendance, approved leave, weekly off, and paid holidays.',
     rules: [
-      ['Salary Basis Days', 'Full Month'],
       ['Fixed Paid Days', '26'],
       ['Salary Cycle Start Day', '1'],
       ['Salary Cycle End Day', '31'],
@@ -233,14 +232,19 @@ const defaultPolicies = [
 
 class PayrollPolicyService {
   ensureDefaults = async () => {
-    await Promise.all(
-      defaultPolicies.map(policy =>
-        PayrollPolicyModel.updateOne(
-          { title: policy.title, category: policy.category, isDefault: true },
-          { $setOnInsert: policy },
-          { upsert: true },
-        ),
-      ),
+    const masterPolicy = defaultPolicies[0];
+    await PayrollPolicyModel.updateOne(
+      { title: masterPolicy.title, category: masterPolicy.category, isDefault: true },
+      { $setOnInsert: masterPolicy },
+      { upsert: true },
+    );
+    await PayrollPolicyModel.deleteMany(
+      {
+        isDefault: true,
+        title: {
+          $in: defaultPolicies.slice(1).map(policy => policy.title),
+        },
+      },
     );
   };
 

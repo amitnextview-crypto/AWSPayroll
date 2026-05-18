@@ -86,6 +86,13 @@ export const AdminHomeScreen = ({navigation}) => {
           <Text style={styles.meta}>Deductions</Text>
           <Text style={styles.value}>{formatCurrency(payroll.deductions || 0)}</Text>
         </View>
+        <View style={styles.payrollRow}>
+          <Text style={styles.meta}>Payable till today</Text>
+          <Text style={styles.value}>{formatCurrency(payroll.payableTillDate || 0)}</Text>
+        </View>
+        <Text style={styles.meta}>
+          Cycle: {payroll.cycle?.startDate || '-'} to {payroll.cycle?.endDate || '-'} / Expenses included: {formatCurrency(payroll.approvedExpensesTillDate || 0)}
+        </Text>
       </Card>
 
       <Card>
@@ -98,6 +105,7 @@ export const AdminHomeScreen = ({navigation}) => {
             ['Attendance', CalendarCheck, 'AdminAttendance'],
             ['Leaves', FileCheck, 'AdminLeaves'],
             ['Salaries', IndianRupee, 'AdminSalaries'],
+            ['Monthly Salaries', IndianRupee, 'AdminMonthlySalaries'],
             ['Expenses', ReceiptText, 'AdminExpenses'],
             ['Policies', ShieldCheck, 'AdminPolicies'],
           ].map(([label, Icon, route]) => (

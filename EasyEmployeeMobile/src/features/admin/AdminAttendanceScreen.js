@@ -11,6 +11,7 @@ import {
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
@@ -46,6 +47,37 @@ const statusForMissing = (leaves, year, month, date) => {
 };
 
 const emptyEdit = {status: 'Absent', attendanceIn: '', attendanceOut: '', late: 'No', timeStatus: ''};
+const statusOptions = [
+  {label: 'Present', value: 'Present'},
+  {label: 'Half Day', value: 'Half Day'},
+  {label: 'Absent', value: 'Absent'},
+  {label: 'Leave', value: 'Leave'},
+];
+const lateOptions = [
+  {label: 'No', value: 'No'},
+  {label: 'Yes', value: 'Yes'},
+];
+const timeStatusOptions = [
+  {label: 'Auto', value: ''},
+  {label: 'Full Time', value: 'Full Time'},
+  {label: 'Half Time', value: 'Half Time'},
+  {label: 'Holiday', value: 'Holiday'},
+];
+const normalizeTimeInput = value => {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return '';
+  const match = text.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return text;
+  let hour = Number(match[1]);
+  const minute = match[2];
+  const meridian = match[3]?.toUpperCase();
+  if (!meridian) {
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${String(hour).padStart(2, '0')}:${minute} ${suffix}`;
+  }
+  return `${String(hour).padStart(2, '0')}:${minute} ${meridian}`;
+};
 
 export const AdminAttendanceScreen = ({route}) => {
   const today = useMemo(() => todayParts(), []);
@@ -229,7 +261,7 @@ export const AdminAttendanceScreen = ({route}) => {
     setError('');
     try {
       const present = editForm.status === 'Present' || editForm.status === 'Half Day';
-      await updateAdminAttendance({
+      const response = await updateAdminAttendance({
         id: row.id || undefined,
         employeeID: row.employeeID,
         date: row.date,
@@ -238,11 +270,12 @@ export const AdminAttendanceScreen = ({route}) => {
         day: row.day,
         present,
         status: editForm.status,
-        attendanceIn: editForm.attendanceIn || '-',
-        attendanceOut: editForm.attendanceOut || '-',
+        attendanceIn: normalizeTimeInput(editForm.attendanceIn) || '-',
+        attendanceOut: normalizeTimeInput(editForm.attendanceOut) || '-',
         late: editForm.late || 'No',
         timeStatus: editForm.timeStatus || (editForm.status === 'Half Day' ? 'Half Time' : editForm.status === 'Present' ? 'Full Time' : '-'),
       });
+      if (response?.success === false) throw new Error(response.message || 'Attendance could not be updated.');
       setEditingKey('');
       await loadAttendance();
       await loadTodayAbsences();
@@ -318,10 +351,11 @@ export const AdminAttendanceScreen = ({route}) => {
               />
               {editingKey === row.key ? (
                 <View style={styles.inlineEdit}>
-                  <AppTextInput label="Status (Present, Half Day, Leave, Absent)" value={editForm.status} onChangeText={value => setEdit('status', value)} />
+                  <Text style={styles.inputLabel}>Status</Text>
+                  <FilterChips items={statusOptions} value={editForm.status} onChange={value => setEdit('status', value)} />
                   <View style={styles.twoCol}>
-                    <AppTextInput label="In Time" placeholder="09:30 AM" value={editForm.attendanceIn} onChangeText={value => setEdit('attendanceIn', value)} style={styles.flex} />
-                    <AppTextInput label="Out Time" placeholder="06:30 PM" value={editForm.attendanceOut} onChangeText={value => setEdit('attendanceOut', value)} style={styles.flex} />
+                    <AppTextInput label="In Time" placeholder="09:30 AM" keyboardType="numbers-and-punctuation" value={editForm.attendanceIn} onChangeText={value => setEdit('attendanceIn', value)} style={styles.flex} />
+                    <AppTextInput label="Out Time" placeholder="06:30 PM" keyboardType="numbers-and-punctuation" value={editForm.attendanceOut} onChangeText={value => setEdit('attendanceOut', value)} style={styles.flex} />
                   </View>
                   <View style={styles.actions}>
                     <AppButton icon={Check} title="Update" loading={loading} onPress={() => saveAttendance(row)} />
@@ -382,15 +416,16 @@ export const AdminAttendanceScreen = ({route}) => {
           <Text style={styles.meta}>Reason: {row.reason || '-'}</Text>
           {editingKey === row.key ? (
             <View style={styles.editBox}>
-              <AppTextInput label="Status (Present, Half Day, Leave, Absent)" value={editForm.status} onChangeText={value => setEdit('status', value)} />
+              <Text style={styles.inputLabel}>Status</Text>
+              <FilterChips items={statusOptions} value={editForm.status} onChange={value => setEdit('status', value)} />
               <View style={styles.twoCol}>
-                <AppTextInput label="In Time" placeholder="09:30 AM" value={editForm.attendanceIn} onChangeText={value => setEdit('attendanceIn', value)} style={styles.flex} />
-                <AppTextInput label="Out Time" placeholder="06:30 PM" value={editForm.attendanceOut} onChangeText={value => setEdit('attendanceOut', value)} style={styles.flex} />
+                <AppTextInput label="In Time" placeholder="09:30 AM" keyboardType="numbers-and-punctuation" value={editForm.attendanceIn} onChangeText={value => setEdit('attendanceIn', value)} style={styles.flex} />
+                <AppTextInput label="Out Time" placeholder="06:30 PM" keyboardType="numbers-and-punctuation" value={editForm.attendanceOut} onChangeText={value => setEdit('attendanceOut', value)} style={styles.flex} />
               </View>
-              <View style={styles.twoCol}>
-                <AppTextInput label="Late" placeholder="Yes or No" value={editForm.late} onChangeText={value => setEdit('late', value)} style={styles.flex} />
-                <AppTextInput label="Time Status" placeholder="Full Time / Half Time" value={editForm.timeStatus} onChangeText={value => setEdit('timeStatus', value)} style={styles.flex} />
-              </View>
+              <Text style={styles.inputLabel}>Late</Text>
+              <FilterChips items={lateOptions} value={editForm.late} onChange={value => setEdit('late', value)} />
+              <Text style={styles.inputLabel}>Time Status</Text>
+              <FilterChips items={timeStatusOptions} value={editForm.timeStatus} onChange={value => setEdit('timeStatus', value)} />
               <View style={styles.actions}>
                 <AppButton icon={Check} title="Update" loading={loading} onPress={() => saveAttendance(row)} />
                 <AppButton icon={X} title="Cancel" variant="muted" onPress={() => setEditingKey('')} />
@@ -416,6 +451,7 @@ const styles = StyleSheet.create({
   heading: {alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between'},
   name: {color: colors.text, flex: 1, fontSize: 16, fontWeight: '900'},
   meta: {color: colors.textMuted, marginTop: spacing.xs},
+  inputLabel: {color: colors.text, fontSize: 13, fontWeight: '800', marginTop: spacing.xs},
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   employeeList: {maxHeight: 246},
