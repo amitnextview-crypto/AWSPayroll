@@ -1,5 +1,13 @@
 const PayrollPolicyModel = require('../models/payroll-policy-model');
 
+const MASTER_POLICY_TITLE = 'Master Salary Rule';
+const PREFERRED_MASTER_POLICY_ID = '6a0ab132a0481a75d5a6aca3';
+const KNOWN_DUPLICATE_MASTER_POLICY_IDS = ['6a0b04a2c4298fcad5539f05'];
+
+const isMasterSalaryRule = policy =>
+  String(policy?.title || '').trim().toLowerCase() === 'master salary rule' ||
+  String(policy?.category || '').trim().toLowerCase() === 'master salary rule';
+
 const defaultPolicies = [
   {
     title: 'Master Salary Rule',
@@ -11,6 +19,7 @@ const defaultPolicies = [
       ['Fixed Paid Days', '26'],
       ['Salary Cycle Start Day', '1'],
       ['Salary Cycle End Day', '31'],
+      ['Annual Start Date', '01-04'],
       ['Weekly Off Days', 'Sunday'],
       ['Approved Leave Paid', 'Yes'],
       ['Paid Holiday Dates', '2026-01-26, 2026-08-15, 2026-10-02'],
@@ -231,13 +240,68 @@ const defaultPolicies = [
 }));
 
 class PayrollPolicyService {
+  ensureSingleMasterPolicy = async () => {
+    const masterPolicies = await PayrollPolicyModel.find({
+      $or: [
+        { title: /^master salary rule$/i },
+        { category: /^master salary rule$/i },
+        { _id: { $in: [PREFERRED_MASTER_POLICY_ID, ...KNOWN_DUPLICATE_MASTER_POLICY_IDS] } },
+      ],
+    }).sort({ updatedAt: -1, createdAt: -1 });
+
+    if (!masterPolicies.length) return null;
+
+    const preferred = masterPolicies.find(item => String(item._id) === PREFERRED_MASTER_POLICY_ID);
+    const withAdmin = masterPolicies.find(item => item.adminID);
+    const canonical = preferred || withAdmin || masterPolicies[0];
+    const duplicateIds = masterPolicies
+      .filter(item => String(item._id) !== String(canonical._id))
+      .map(item => item._id);
+
+    if (duplicateIds.length) {
+      await PayrollPolicyModel.deleteMany({ _id: { $in: duplicateIds } });
+    }
+
+    canonical.title = MASTER_POLICY_TITLE;
+    canonical.category = MASTER_POLICY_TITLE;
+    canonical.status = canonical.status || 'active';
+    canonical.sortOrder = 0;
+    canonical.isDefault = Boolean(canonical.isDefault);
+    return canonical;
+  };
+
+  ensureAnnualStartRule = async policy => {
+    if (!policy) return null;
+    const hasAnnualStartDate = (policy.rules || []).some(
+      rule => String(rule.label || '').trim().toLowerCase() === 'annual start date',
+    );
+    if (!hasAnnualStartDate) {
+      policy.rules.push({
+        label: 'Annual Start Date',
+        value: '01-04',
+        note: 'DD-MM. Attendance, leave, and approved expense history resets when this day-month arrives.',
+      });
+    }
+    return policy.save();
+  };
+
   ensureDefaults = async () => {
     const masterPolicy = defaultPolicies[0];
-    await PayrollPolicyModel.updateOne(
-      { title: masterPolicy.title, category: masterPolicy.category, isDefault: true },
-      { $setOnInsert: masterPolicy },
-      { upsert: true },
-    );
+    let savedMaster = await this.ensureSingleMasterPolicy();
+
+    if (!savedMaster) {
+      savedMaster = await PayrollPolicyModel.create(masterPolicy);
+    }
+    await this.ensureAnnualStartRule(savedMaster);
+
+    await PayrollPolicyModel.deleteMany({
+      _id: { $ne: savedMaster._id },
+      $nor: [
+        { title: /^master salary rule$/i },
+        { category: /^master salary rule$/i },
+      ],
+    });
+
     await PayrollPolicyModel.deleteMany(
       {
         isDefault: true,
@@ -250,25 +314,50 @@ class PayrollPolicyService {
 
   getAll = async (query = {}) => {
     await this.ensureDefaults();
-    const filter = {};
+    const filter = {
+      $or: [
+        { title: /^master salary rule$/i },
+        { category: /^master salary rule$/i },
+      ],
+    };
     if (query.status) filter.status = query.status;
-    if (query.category) filter.category = new RegExp(String(query.category).trim(), 'i');
-    if (query.search) {
-      const search = new RegExp(String(query.search).trim(), 'i');
-      filter.$or = [
-        { title: search },
-        { category: search },
-        { description: search },
-        { 'rules.label': search },
-        { 'rules.value': search },
-      ];
-    }
     return await PayrollPolicyModel.find(filter).sort({ sortOrder: 1, createdAt: -1 });
   };
 
-  createPolicy = async (data) => PayrollPolicyModel.create(data);
+  createPolicy = async (data) => {
+    if (isMasterSalaryRule(data)) {
+      const canonical = await this.ensureSingleMasterPolicy();
+      const payload = {
+        ...data,
+        title: MASTER_POLICY_TITLE,
+        category: MASTER_POLICY_TITLE,
+        sortOrder: 0,
+      };
+      if (canonical) {
+        Object.assign(canonical, payload);
+        return canonical.save();
+      }
+      return PayrollPolicyModel.create(payload);
+    }
+    return PayrollPolicyModel.create(data);
+  };
 
-  updatePolicy = async (id, data) => PayrollPolicyModel.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+  updatePolicy = async (id, data) => {
+    if (isMasterSalaryRule(data)) {
+      const canonical = await this.ensureSingleMasterPolicy();
+      const payload = {
+        ...data,
+        title: MASTER_POLICY_TITLE,
+        category: MASTER_POLICY_TITLE,
+        sortOrder: 0,
+      };
+      if (canonical) {
+        Object.assign(canonical, payload);
+        return canonical.save();
+      }
+    }
+    return PayrollPolicyModel.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+  };
 
   deletePolicy = async (id) => PayrollPolicyModel.findByIdAndDelete(id);
 }

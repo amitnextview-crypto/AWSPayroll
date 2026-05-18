@@ -25,6 +25,10 @@ const normalizePayload = body => ({
   meta: body.meta || {},
 });
 
+const isMasterSalaryRule = data =>
+  String(data.title || '').trim().toLowerCase() === 'master salary rule' ||
+  String(data.category || '').trim().toLowerCase() === 'master salary rule';
+
 class PayrollPolicyController {
   async getPolicies(req, res, next) {
     try {
@@ -41,6 +45,9 @@ class PayrollPolicyController {
       data.adminID = req.user?._id;
       if (!data.title) return res.status(400).json({ success: false, message: 'Policy title is required' });
       if (!data.rules.length) return res.status(400).json({ success: false, message: 'At least one policy rule is required' });
+      if (!isMasterSalaryRule(data)) {
+        return res.status(400).json({ success: false, message: 'Only Master Salary Rule can be saved in payroll policies' });
+      }
       const created = await payrollPolicyService.createPolicy(data);
       res.status(201).json({ success: true, message: 'Policy created successfully', data: created });
     } catch (err) {
@@ -57,6 +64,9 @@ class PayrollPolicyController {
       const data = normalizePayload(req.body);
       if (!data.title) return res.status(400).json({ success: false, message: 'Policy title is required' });
       if (!data.rules.length) return res.status(400).json({ success: false, message: 'At least one policy rule is required' });
+      if (!isMasterSalaryRule(data)) {
+        return res.status(400).json({ success: false, message: 'Only Master Salary Rule can be saved in payroll policies' });
+      }
       const updated = await payrollPolicyService.updatePolicy(id, data);
       if (!updated) return res.status(404).json({ success: false, message: 'Policy not found' });
       res.json({ success: true, message: 'Policy updated successfully', data: updated });

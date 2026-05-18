@@ -20,10 +20,29 @@ const idOf = item => String(item?.id || item?._id || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
 const monthKey = item => `${item.year}-${String(item.month).padStart(2, '0')}`;
 
+const previousMonthParts = today => {
+  const date = new Date(today.year, today.month - 2, 1);
+  return {month: date.getMonth() + 1, year: date.getFullYear()};
+};
+
 const parseJoiningDate = employee => {
   const parsed = new Date(employee?.date || employee?.joiningDate || employee?.createdAt || '');
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
+
+const SummaryTile = ({label, value, tone}) => (
+  <View style={[styles.summaryTile, tone === 'success' ? styles.summaryTileSuccess : null]}>
+    <Text style={[styles.summaryLabel, tone === 'success' ? styles.summaryLabelSuccess : null]}>{label}</Text>
+    <Text style={[styles.summaryValue, tone === 'success' ? styles.summaryValueSuccess : null]}>{value}</Text>
+  </View>
+);
+
+const DetailLine = ({label, value}) => (
+  <View style={styles.detailLine}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={styles.detailValue}>{value}</Text>
+  </View>
+);
 
 export const AdminMonthlySalaryScreen = ({navigation}) => {
   const [employees, setEmployees] = useState([]);
@@ -72,15 +91,16 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
   const exportPayroll = async () => {
     setLoading(true);
     try {
+      const pastMonth = previousMonthParts(today);
       const csv = await exportAdminMonthlySalaries({
-        month: Number(payrollMonth) || today.month,
-        year: Number(payrollYear) || today.year,
+        month: pastMonth.month,
+        year: pastMonth.year,
       });
       await Share.share({
-        title: `monthly-salaries-${payrollMonth}-${payrollYear}.csv`,
+        title: `bank-salary-sheet-${pastMonth.month}-${pastMonth.year}.csv`,
         message: String(csv || ''),
       });
-      setToast('Monthly salary CSV is ready to share.');
+      setToast('Past month bank salary sheet is ready to share.');
     } catch (err) {
       setToast(err.message || 'Salary export could not be prepared.');
     } finally {
@@ -251,26 +271,27 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
           {selectedMonthDetail ? (
             <Card>
               <Text style={styles.title}>{selectedMonthDetail.monthLabel || `${selectedMonthDetail.month}/${selectedMonthDetail.year}`} Salary Details</Text>
-              <Text style={styles.net}>{selectedMonthDetail.salaryLabel || 'Salary Till Date'}: {formatCurrency(selectedMonthDetail.totalPay || 0)}</Text>
-              <Text style={styles.meta}>Assigned monthly net salary: {formatCurrency(selectedMonthDetail.assignedNetPay || 0)}</Text>
-              <Text style={styles.meta}>Assigned monthly gross salary: {formatCurrency(selectedMonthDetail.assignedGross || selectedMonthDetail.earnings?.gross || 0)}</Text>
-              <Text style={styles.meta}>Per day salary: {formatCurrency(selectedMonthDetail.perDaySalary || 0)}</Text>
-              <Text style={styles.meta}>Salary till date: {formatCurrency(selectedMonthDetail.salaryTillDate || 0)}</Text>
-              <Text style={styles.meta}>Payable days: {selectedMonthDetail.payableDays} / Attendance days before weekly-off deduction: {selectedMonthDetail.attendancePayableDays ?? selectedMonthDetail.payableDays}</Text>
-              <Text style={styles.meta}>Present: {selectedMonthDetail.presentDays} / Leave: {selectedMonthDetail.leaveDays} / Half days: {selectedMonthDetail.halfDays || 0}</Text>
-              <Text style={styles.meta}>Weekly off days: {selectedMonthDetail.weeklyOffDays ?? selectedMonthDetail.sundayPaidDays ?? 0} / Weekly off salary impact: 0 day</Text>
-              <Text style={styles.meta}>Holiday paid: {selectedMonthDetail.holidayPaidDays || 0} / Absent: {selectedMonthDetail.absentDays}</Text>
-              <Text style={styles.meta}>Today: {today.date}/{today.month}/{today.year}</Text>
-              <Text style={styles.meta}>Cycle: {selectedMonthDetail.cycle?.startDate} to {selectedMonthDetail.cycle?.endDate} / Master paid days: {selectedMonthDetail.cycle?.openDaysInMonth}</Text>
-              {selectedMonthDetail.cycle?.fullEndDate && selectedMonthDetail.cycle.fullEndDate !== selectedMonthDetail.cycle?.endDate ? (
-                <Text style={styles.meta}>Cycle final end date: {selectedMonthDetail.cycle.fullEndDate}</Text>
-              ) : null}
-              <Text style={styles.meta}>Approved expenses: {formatCurrency(selectedMonthDetail.totalExpenses || 0)}</Text>
+              <View style={styles.summaryGrid}>
+                <SummaryTile label={selectedMonthDetail.salaryLabel || 'Salary Till Date'} value={formatCurrency(selectedMonthDetail.totalPay || 0)} tone="success" />
+                <SummaryTile label="Net Salary" value={formatCurrency(selectedMonthDetail.assignedNetPay || 0)} />
+                <SummaryTile label="Per Day" value={formatCurrency(selectedMonthDetail.perDaySalary || 0)} />
+                <SummaryTile label="Payable Days" value={String(selectedMonthDetail.payableDays || 0)} />
+              </View>
+              <View style={styles.detailBox}>
+                <DetailLine label="Cycle" value={`${selectedMonthDetail.cycle?.startDate || '-'} to ${selectedMonthDetail.cycle?.endDate || '-'}`} />
+                <DetailLine label="Fixed paid days" value={String(selectedMonthDetail.cycle?.openDaysInMonth || '-')} />
+                <DetailLine label="Present / Leave / Half" value={`${selectedMonthDetail.presentDays || 0} / ${selectedMonthDetail.leaveDays || 0} / ${selectedMonthDetail.halfDays || 0}`} />
+                <DetailLine label="Holiday / Absent" value={`${selectedMonthDetail.holidayPaidDays || 0} / ${selectedMonthDetail.absentDays || 0}`} />
+                <DetailLine label="Approved expenses" value={formatCurrency(selectedMonthDetail.totalExpenses || 0)} />
+              </View>
               <View style={styles.summary}>
-                {[...(selectedMonthDetail.attendanceDetails || [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).map(day => (
-                  <Text key={day.date} style={styles.summaryText}>
-                    {day.date} {day.day}: {day.status} / {day.timeStatus} / {day.payableDays} day / {day.reason}
-                  </Text>
+                <Text style={styles.section}>Recent Attendance</Text>
+                {[...(selectedMonthDetail.attendanceDetails || [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8).map(day => (
+                  <View key={day.date} style={styles.dayRow}>
+                    <Text style={styles.dayDate}>{day.date}</Text>
+                    <Text style={styles.dayStatus}>{day.status}</Text>
+                    <Text style={styles.dayPay}>{day.payableDays} day</Text>
+                  </View>
                 ))}
               </View>
             </Card>
@@ -300,6 +321,21 @@ const styles = StyleSheet.create({
   unassigned: {backgroundColor: colors.surfaceMuted, color: colors.textMuted},
   summary: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginVertical: spacing.md, padding: spacing.md},
   summaryText: {color: colors.textMuted, fontWeight: '800'},
+  summaryGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},
+  summaryTile: {backgroundColor: colors.surfaceMuted, borderRadius: 8, flexBasis: '47%', flexGrow: 1, padding: spacing.md},
+  summaryTileSuccess: {backgroundColor: colors.success},
+  summaryLabel: {color: colors.textMuted, fontSize: 12, fontWeight: '900'},
+  summaryLabelSuccess: {color: colors.surface},
+  summaryValue: {color: colors.text, fontSize: 16, fontWeight: '900', marginTop: spacing.xs},
+  summaryValueSuccess: {color: colors.surface},
+  detailBox: {borderColor: colors.border, borderRadius: 8, borderWidth: 1, marginTop: spacing.md, padding: spacing.md},
+  detailLine: {borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
+  detailLabel: {color: colors.textMuted, flex: 1, fontWeight: '800'},
+  detailValue: {color: colors.text, flex: 1.2, fontWeight: '900', textAlign: 'right'},
+  dayRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
+  dayDate: {color: colors.text, flex: 1, fontWeight: '900'},
+  dayStatus: {color: colors.textMuted, flex: 1, fontWeight: '800'},
+  dayPay: {color: colors.primary, fontWeight: '900'},
   net: {color: colors.text, fontSize: 17, fontWeight: '900', marginTop: spacing.xs},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
   error: {color: colors.danger},

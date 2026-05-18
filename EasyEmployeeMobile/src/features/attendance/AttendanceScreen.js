@@ -96,18 +96,43 @@ export const AttendanceScreen = () => {
   );
 
   const displayRecords = useMemo(
-    () =>
-      records.map(item =>
-        isWeeklyOffDate(item)
+    () => {
+      const selectedMonth = Number(filters.month) || currentParts.month;
+      const selectedYear = Number(filters.year) || currentParts.year;
+      const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+      const maxDay = selectedYear === currentParts.year && selectedMonth === currentParts.month ? currentParts.date : daysInMonth;
+      const recordsByDate = new Map(records.map(item => [String(item.date), item]));
+
+      return Array.from({length: maxDay}, (_, index) => {
+        const date = index + 1;
+        const day = dayNames[new Date(selectedYear, selectedMonth - 1, date).getDay()];
+        const item = recordsByDate.get(String(date)) || {
+          _id: `absent-${selectedYear}-${selectedMonth}-${date}`,
+          date,
+          month: selectedMonth,
+          year: selectedYear,
+          day,
+          present: false,
+          status: 'Absent',
+          timeStatus: '-',
+          attendanceIn: '-',
+          attendanceOut: '-',
+          late: '-',
+          totalHours: '-',
+          reason: 'Check-in not recorded',
+        };
+
+        return isWeeklyOffDate(item)
           ? {
               ...item,
               displayStatus: 'Weekly Off',
               displayTimeStatus: 'Weekly Off',
               reason: item.reason || `${item.day || 'Day'} weekly off by master salary rule`,
             }
-          : item,
-      ),
-    [isWeeklyOffDate, records],
+          : item;
+      });
+    },
+    [currentParts.date, currentParts.month, currentParts.year, filters.month, filters.year, isWeeklyOffDate, records],
   );
 
   const visibleRecords = useMemo(() => {

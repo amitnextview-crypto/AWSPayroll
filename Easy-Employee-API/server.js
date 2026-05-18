@@ -37,6 +37,21 @@ cron.schedule(
 );
 
 // ✅ Body parser BEFORE routes
+cron.schedule(
+  '10 0 * * *',
+  async () => {
+    try {
+      const result = await userController.annualPayrollDataCleanup();
+      if (result?.success) console.log("Annual payroll data cleanup completed:", result);
+    } catch (error) {
+      console.error("Annual payroll data cleanup failed:", error);
+    }
+  },
+  {
+    timezone: "Asia/Kolkata"
+  }
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

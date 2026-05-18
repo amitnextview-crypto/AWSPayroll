@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const teamService = require('../services/team-service');
 const attendanceService = require('../services/attendance-service');
+const payrollPolicyService = require('../services/payrollPolicyService');
 
 const toNumber = value => {
   const number = Number(value);
@@ -100,6 +101,15 @@ const parseTimeToMinutes = value => {
   return hours * 60 + minutes;
 };
 
+const normalizeRuleLabel = value =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\bdays\b/g, 'day')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const hoursBetweenTimes = (start, end) => {
   const startMinutes = parseTimeToMinutes(start);
   const endMinutes = parseTimeToMinutes(end);
@@ -126,16 +136,16 @@ const attendanceStatusFromTime = (day, totalHours, status = '') => {
 };
 
 const getRuleNumber = (rules, labels, fallback) => {
-  const lowerLabels = labels.map(label => label.toLowerCase());
-  const rule = rules.find(item => lowerLabels.includes(String(item.label || '').trim().toLowerCase()));
+  const normalizedLabels = labels.map(normalizeRuleLabel);
+  const rule = rules.find(item => normalizedLabels.includes(normalizeRuleLabel(item.label)));
   if (!rule) return fallback;
   const number = Number(String(rule.value || '').match(/\d+(\.\d+)?/)?.[0]);
   return Number.isFinite(number) ? number : fallback;
 };
 
 const getRuleValue = (rules, labels, fallback = '') => {
-  const lowerLabels = labels.map(label => label.toLowerCase());
-  const rule = rules.find(item => lowerLabels.includes(String(item.label || '').trim().toLowerCase()));
+  const normalizedLabels = labels.map(normalizeRuleLabel);
+  const rule = rules.find(item => normalizedLabels.includes(normalizeRuleLabel(item.label)));
   return rule ? String(rule.value || '').trim() : fallback;
 };
 
@@ -156,6 +166,7 @@ const fallbackMasterSalaryRules = [
   { label: 'Fixed Paid Days', value: '26' },
   { label: 'Salary Cycle Start Day', value: '1' },
   { label: 'Salary Cycle End Day', value: '31' },
+  { label: 'Annual Start Date', value: '01-04' },
   { label: 'Weekly Off Days', value: 'Sunday' },
   { label: 'Approved Leave Paid', value: 'Yes' },
   { label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02' },
@@ -166,12 +177,31 @@ const fallbackMasterSalaryRules = [
   { label: 'Expense Reimbursement Paid', value: 'Yes' },
 ];
 
+const getMasterSalaryPolicy = async () => {
+  await payrollPolicyService.ensureDefaults();
+  const policies = await PayrollPolicy.find({
+    status: 'active',
+    $or: [
+      { category: /^master salary rule$/i },
+      { title: /^master salary rule$/i },
+    ],
+  }).sort({ updatedAt: -1, createdAt: -1 });
+  return policies[0];
+};
+
+const parseDayMonthRule = value => {
+  const parts = String(value || '').match(/\d{1,2}/g);
+  if (!parts || parts.length < 2) return null;
+  const day = Number(parts[0]);
+  const month = Number(parts[1]);
+  if (!Number.isInteger(day) || !Number.isInteger(month) || day < 1 || day > 31 || month < 1 || month > 12) {
+    return null;
+  }
+  return { day, month };
+};
+
 const getPayrollCycleSettings = async (year, month) => {
-  const policies = await PayrollPolicy.find({ status: 'active' });
-  const masterPolicy = policies.find(policy =>
-    String(policy.category || '').toLowerCase() === 'master salary rule' ||
-    String(policy.title || '').toLowerCase() === 'master salary rule'
-  );
+  const masterPolicy = await getMasterSalaryPolicy();
   const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
   const monthDays = daysInMonth(year, month);
   const requestedStartDay = getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
@@ -198,7 +228,11 @@ const getPayrollCycleSettings = async (year, month) => {
     const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     return !weeklyOffDays.includes(day);
   });
-  const fixedPaidDays = getRuleNumber(rules, ['Fixed Paid Days', 'Office Open Days In Month', 'Salary Paid Days'], workingDates.length || monthDays);
+  const fixedPaidDays = getRuleNumber(
+    rules,
+    ['Fixed Paid Days', 'Fixed Paid Day', 'Fixed Pay Days', 'Paid Days', 'Office Open Days In Month', 'Salary Paid Days'],
+    workingDates.length || monthDays,
+  );
   return {
     openDaysInMonth: fixedPaidDays,
     salaryBasis: `${fixedPaidDays} fixed paid days from master salary rule`,
@@ -389,6 +423,65 @@ const attendanceLocationPayload = (latitude, longitude, accuracy, distanceMeters
 
 
 class UserController {
+  annualPayrollDataCleanup = async () => {
+    const today = normalizeDateOnly(new Date());
+    const todayIso = formatIsoDate(today);
+    const masterPolicy = await getMasterSalaryPolicy();
+    const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
+    const annualStart = parseDayMonthRule(
+      getRuleValue(rules, ['Annual Start Date', 'Annual Start Day Month', 'Annual Data Reset Date'], ''),
+    );
+
+    if (!annualStart) return { skipped: true, reason: 'Annual start date not configured' };
+    if (today.getDate() !== annualStart.day || today.getMonth() + 1 !== annualStart.month) {
+      return { skipped: true, reason: 'Today is not annual cleanup date' };
+    }
+    if (masterPolicy?.meta?.lastAnnualCleanupDate === todayIso) {
+      return { skipped: true, reason: 'Annual cleanup already completed today' };
+    }
+
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const date = today.getDate();
+    const attendanceFilter = {
+      $or: [
+        { year: { $lt: year } },
+        { year, month: { $lt: month } },
+        { year, month, date: { $lt: date } },
+      ],
+    };
+
+    const [attendance, leaves, expenses] = await Promise.all([
+      Attendance.deleteMany(attendanceFilter),
+      Leave.deleteMany({ endDate: { $lt: todayIso } }),
+      Expense.deleteMany({ appliedDate: { $lt: todayIso } }),
+    ]);
+
+    if (masterPolicy?._id) {
+      await PayrollPolicy.updateOne(
+        { _id: masterPolicy._id },
+        {
+          $set: {
+            'meta.lastAnnualCleanupDate': todayIso,
+            'meta.lastAnnualCleanupSummary': {
+              attendanceDeleted: attendance.deletedCount || 0,
+              leavesDeleted: leaves.deletedCount || 0,
+              expensesDeleted: expenses.deletedCount || 0,
+            },
+          },
+        },
+      );
+    }
+
+    return {
+      success: true,
+      date: todayIso,
+      attendanceDeleted: attendance.deletedCount || 0,
+      leavesDeleted: leaves.deletedCount || 0,
+      expensesDeleted: expenses.deletedCount || 0,
+    };
+  }
+
   getCompanySettings = async (req, res, next) => {
     const settings = await getCompanySettingDocument();
     res.json({ success: true, data: settings });
@@ -720,6 +813,9 @@ class UserController {
         email: user.email,
         username: user.username,
         employeeCode: user.employeeCode,
+        bankName: user.bankName,
+        accountNumber: user.accountNumber,
+        ifscCode: user.ifscCode,
         month,
         year,
         cycle: {
@@ -831,50 +927,26 @@ class UserController {
         'Employee Name',
         'Email',
         'Employee ID',
-        'Month',
-        'Year',
+        'Bank Name',
+        'Account Number',
+        'IFSC Code',
         'Cycle Start',
         'Cycle End',
-        'Open Days',
-        'Assigned Gross Salary',
-        'Assigned Net Pay',
-        'Per Day Salary',
-        'Payable Days',
-        'Attendance Payable Days',
-        'Present Days',
-        'Half Days',
-        'Approved Leave Days',
-        'Weekly Off Days',
-        'Weekly Off Salary Impact Days',
-        'Paid Holiday Days',
-        'Absent Days',
-        'Salary Till Date',
-        'Approved Expenses',
-        'Total Pay',
+        'Salary Month',
+        'Salary Year',
+        'Amount',
       ],
       ...payload.data.map(item => [
         item.name,
         item.email,
         item.username || item.employeeCode || String(item.employeeID),
+        item.bankName || '',
+        item.accountNumber || '',
+        item.ifscCode || '',
+        item.cycle?.startDate,
+        item.cycle?.fullEndDate || item.cycle?.endDate,
         item.month,
         item.year,
-        item.cycle?.startDate,
-        item.cycle?.endDate,
-        item.cycle?.openDaysInMonth,
-        item.assignedGross,
-        item.assignedNetPay,
-        item.perDaySalary,
-        item.payableDays,
-        item.attendancePayableDays,
-        item.presentDays,
-        item.halfDays,
-        item.leaveDays,
-        item.weeklyOffDays ?? item.sundayPaidDays,
-        0,
-        item.holidayPaidDays,
-        item.absentDays,
-        item.salaryTillDate,
-        item.totalExpenses,
         item.totalPay,
       ]),
     ];
@@ -882,7 +954,7 @@ class UserController {
       .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="monthly-salaries-${req.query.month || new Date().getMonth() + 1}-${req.query.year || new Date().getFullYear()}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="bank-salary-sheet-${req.query.month || new Date().getMonth() + 1}-${req.query.year || new Date().getFullYear()}.csv"`);
     return res.send(csv);
   }
 

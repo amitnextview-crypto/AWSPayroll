@@ -53,11 +53,12 @@ export const HomeScreen = ({navigation}) => {
         : todayRecord?.attendanceIn
           ? 'Checked in'
           : 'Not checked in';
+      const salaryDetail = salaryResponse?.data || salaryResponse?.salary || {};
       setSummary({
         attendanceStatus,
         expenseCount: (expenseResponse?.data || expenseResponse?.expenses || []).length,
         leaveCount: (leaveResponse?.data || []).length,
-        salaryTillDate: salaryResponse?.data?.totalPay || 0,
+        salaryTillDate: salaryDetail.salaryTillDate ?? salaryDetail.totalPay ?? 0,
       });
     } catch (err) {
       setSummary(current => ({...current, attendanceStatus: 'Unavailable'}));

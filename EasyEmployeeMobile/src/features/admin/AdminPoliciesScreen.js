@@ -1,18 +1,15 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Alert, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {Edit3, Plus, Save, Trash2, X} from 'lucide-react-native';
 import {
   addPayrollPolicy,
-  deletePayrollPolicy,
   getPayrollPolicies,
   updatePayrollPolicy,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
-import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
-import {StatusPill} from '../../components/StatusPill';
 import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -35,6 +32,7 @@ const masterRuleTemplate = {
     {label: 'Fixed Paid Days', value: '26', note: '26 for Sunday off, 22 for Saturday and Sunday off'},
     {label: 'Salary Cycle Start Day', value: '1', note: 'Monthly cycle start date'},
     {label: 'Salary Cycle End Day', value: '31', note: 'Use 31 for month end'},
+    {label: 'Annual Start Date', value: '01-04', note: 'DD-MM. Attendance, monthly salary, leave, and expense history resets when this day-month arrives'},
     {label: 'Weekly Off Days', value: 'Sunday', note: 'Use Sunday or Saturday, Sunday. Paid working days are calculated automatically.'},
     {label: 'Approved Leave Paid', value: 'Yes', note: 'Approved leave salary paid'},
     {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
@@ -48,6 +46,7 @@ const masterRuleTemplate = {
 
 const quickRules = [
   {label: 'Fixed Paid Days', value: '26', note: '26 for Sunday off, 22 for Saturday and Sunday off'},
+  {label: 'Annual Start Date', value: '01-04', note: 'DD-MM annual payroll data reset date'},
   {label: 'Weekly Off Days', value: 'Sunday', note: 'Sunday or Saturday, Sunday'},
   {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
   {label: 'Approved Leave Paid', value: 'Yes', note: 'Yes or No'},
@@ -67,19 +66,10 @@ const tabItems = [
 
 export const AdminPoliciesScreen = () => {
   const [items, setItems] = useState([]);
-  const [expanded, setExpanded] = useState({});
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [activeTab, setActiveTab] = useState('master');
   const [editingId, setEditingId] = useState('');
   const [form, setForm] = useState(emptyPolicy);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
-
-  const categories = useMemo(() => {
-    const unique = Array.from(new Set(items.map(item => item.category).filter(Boolean)));
-    return [{label: 'All', value: ''}, ...unique.map(value => ({label: value, value}))];
-  }, [items]);
 
   const masterPolicy = useMemo(
     () =>
@@ -90,16 +80,6 @@ export const AdminPoliciesScreen = () => {
       ),
     [items],
   );
-
-  const visibleItems = useMemo(() => {
-    const lower = search.toLowerCase();
-    return items.filter(item => {
-      const haystack = `${item.title} ${item.category} ${(item.rules || [])
-        .map(rule => `${rule.label} ${rule.value}`)
-        .join(' ')}`.toLowerCase();
-      return (!category || item.category === category) && haystack.includes(lower);
-    });
-  }, [items, search, category]);
 
   const load = async () => {
     setLoading(true);
@@ -118,28 +98,9 @@ export const AdminPoliciesScreen = () => {
     load();
   }, []);
 
-  const startAdd = () => {
-    setEditingId('new');
-    setForm(emptyPolicy);
-  };
-
   const startMasterRule = () => {
-    setActiveTab('master');
     setEditingId(masterPolicy?._id || masterPolicy?.id || 'new');
     setForm(masterPolicy || masterRuleTemplate);
-  };
-
-  const startEdit = item => {
-    setEditingId(item._id || item.id);
-    setForm({
-      title: item.title || '',
-      category: item.category || 'General',
-      description: item.description || '',
-      status: item.status || 'active',
-      rules: item.rules?.length
-        ? item.rules.map(rule => ({label: rule.label || '', value: rule.value || '', note: rule.note || ''}))
-        : [{label: '', value: '', note: ''}],
-    });
   };
 
   const setRule = (index, key, value) => {
@@ -198,36 +159,10 @@ export const AdminPoliciesScreen = () => {
     }
   };
 
-  const confirmDelete = item => {
-    Alert.alert('Delete policy', `Delete ${item.title}?`, [
-      {text: 'Cancel', style: 'cancel'},
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deletePayrollPolicy(item._id || item.id);
-            setToast('Policy deleted successfully.');
-            load();
-          } catch (err) {
-            setToast(err.message || 'Policy could not be deleted.');
-          }
-        },
-      },
-    ]);
-  };
-
   const renderForm = () => (
     <Card>
-      <Text style={styles.title}>
-        {form.category === 'Master Salary Rule' ? 'Master Salary Rule' : editingId === 'new' ? 'Add New Policy' : 'Edit Policy'}
-      </Text>
-      <AppTextInput label="Policy Title" value={form.title} onChangeText={value => setForm(current => ({...current, title: value}))} />
-      <View style={styles.twoCol}>
-        <AppTextInput label="Category" value={form.category} onChangeText={value => setForm(current => ({...current, category: value}))} style={styles.flex} />
-        <AppTextInput label="Description" value={form.description} onChangeText={value => setForm(current => ({...current, description: value}))} style={styles.flex} />
-      </View>
-      <FilterChips items={statusItems} value={form.status} onChange={value => setForm(current => ({...current, status: value}))} />
+      <Text style={styles.title}>Edit Master Salary Rule</Text>
+      <Text style={styles.meta}>Only this rule is used for salary cycle, paid days, holidays, leave, half day, expenses, and annual cleanup.</Text>
       <Text style={styles.section}>Rules</Text>
       <View style={styles.quickRules}>
         {quickRules.map(rule => (
@@ -256,29 +191,17 @@ export const AdminPoliciesScreen = () => {
       <Card>
         <View style={styles.header}>
           <View style={styles.flex}>
-            <Text style={styles.heading}>Payroll Policies</Text>
-            <Text style={styles.meta}>Master salary rule, corporate policies, and custom admin rules</Text>
+            <Text style={styles.heading}>Master Salary Rule</Text>
+            <Text style={styles.meta}>One clean payroll policy controls all salary calculations.</Text>
           </View>
-          <AppButton icon={Plus} title="Add New Policy" onPress={startAdd} />
+          {!editingId ? <AppButton icon={Edit3} title={masterPolicy ? 'Edit' : 'Create'} onPress={startMasterRule} /> : null}
         </View>
-        <FilterChips items={tabItems} value={activeTab} onChange={setActiveTab} />
-        <AppTextInput label="Search policies or rules" value={search} onChangeText={setSearch} />
-        {activeTab === 'policies' ? <FilterChips items={categories} value={category} onChange={setCategory} /> : null}
       </Card>
 
       {editingId ? renderForm() : null}
 
-      {activeTab === 'master' && !editingId ? (
+      {!editingId ? (
         <Card>
-          <View style={styles.header}>
-            <View style={styles.flex}>
-              <Text style={styles.title}>Master Salary Rule</Text>
-              <Text style={styles.meta}>
-                Monthly salary is calculated from this rule plus attendance, approved leave, weekly off, and paid holidays.
-              </Text>
-            </View>
-            <AppButton icon={Edit3} title={masterPolicy ? 'Edit' : 'Create'} onPress={startMasterRule} />
-          </View>
           {masterPolicy ? (
             <View style={styles.ruleList}>
               {(masterPolicy.rules || []).map((rule, index) => (
@@ -294,43 +217,6 @@ export const AdminPoliciesScreen = () => {
           )}
         </Card>
       ) : null}
-
-      {activeTab === 'policies' ? visibleItems.map(item => {
-        const id = item._id || item.id;
-        const isExpanded = expanded[id] ?? false;
-        const rules = isExpanded ? item.rules || [] : (item.rules || []).slice(0, 4);
-        return (
-          <Card key={id}>
-            <Pressable onPress={() => setExpanded(current => ({...current, [id]: !isExpanded}))}>
-              <View style={styles.header}>
-                <View style={styles.flex}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  <Text style={styles.meta}>{item.category} / {item.rules?.length || 0} rules</Text>
-                </View>
-                <StatusPill value={item.status || 'active'} />
-              </View>
-            </Pressable>
-            {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-            <View style={styles.ruleList}>
-              {rules.map((rule, index) => (
-                <View key={`${rule.label}-${index}`} style={styles.ruleRow}>
-                  <Text style={styles.ruleLabel}>{rule.label}</Text>
-                  <Text style={styles.ruleValue}>{rule.value}</Text>
-                  {rule.note ? <Text style={styles.ruleNote}>{rule.note}</Text> : null}
-                </View>
-              ))}
-            </View>
-            {(item.rules?.length || 0) > 4 ? (
-              <Text style={styles.more}>{isExpanded ? 'Show less' : `Show ${item.rules.length - 4} more rules`}</Text>
-            ) : null}
-            <View style={styles.actions}>
-              <AppButton icon={Edit3} title="Edit" variant="muted" onPress={() => startEdit(item)} />
-              <AppButton icon={Trash2} title="Delete" variant="danger" onPress={() => confirmDelete(item)} />
-            </View>
-          </Card>
-        );
-      }) : null}
-      {!loading && activeTab === 'policies' && !visibleItems.length ? <Text style={styles.empty}>No payroll policies found.</Text> : null}
     </Screen>
   );
 };
