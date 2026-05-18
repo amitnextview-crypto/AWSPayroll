@@ -59,6 +59,9 @@ export const MyMonthlySalaryScreen = () => {
     setYear(String(option.year));
   };
 
+  const salaryIsFinal = Boolean(detail?.isFinalSalary || detail?.cycle?.isFinalSalary);
+  const salaryLabel = detail?.salaryLabel || detail?.cycle?.salaryLabel || (salaryIsFinal ? 'Final Salary' : 'Salary Till Date');
+
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <Card>
@@ -68,7 +71,7 @@ export const MyMonthlySalaryScreen = () => {
           <AppTextInput label="Year" keyboardType="numeric" value={year} onChangeText={value => setYear(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
         </View>
         <View style={styles.actions}>
-          <AppButton icon={Calculator} title="Calculate" loading={loading} onPress={load} />
+          <AppButton icon={Calculator} title="Search Salary" loading={loading} onPress={load} />
         </View>
       </Card>
 
@@ -96,13 +99,21 @@ export const MyMonthlySalaryScreen = () => {
       {detail ? (
         <Card>
           <Text style={styles.title}>{detail.month}/{detail.year} Salary</Text>
-          <Text style={styles.net}>Total Pay Till Date: {formatCurrency(detail.totalPay || 0)}</Text>
+          <View style={[styles.salaryBox, salaryIsFinal ? styles.salaryBoxFinal : null]}>
+            <Text style={[styles.salaryBoxTitle, salaryIsFinal ? styles.salaryBoxTitleFinal : null]}>{salaryLabel}</Text>
+            <Text style={[styles.salaryBoxAmount, salaryIsFinal ? styles.salaryBoxAmountFinal : null]}>
+              {formatCurrency(detail.totalPay || 0)}
+            </Text>
+          </View>
           <Text style={styles.meta}>Assigned net salary: {formatCurrency(detail.assignedNetPay || 0)}</Text>
           <Text style={styles.meta}>Assigned gross salary: {formatCurrency(detail.assignedGross || detail.earnings?.gross || 0)}</Text>
           <Text style={styles.meta}>Per day salary: {formatCurrency(detail.perDaySalary || 0)}</Text>
           <Text style={styles.meta}>Salary till date: {formatCurrency(detail.salaryTillDate || 0)}</Text>
           <Text style={styles.meta}>Approved expenses: {formatCurrency(detail.totalExpenses || 0)}</Text>
           <Text style={styles.meta}>Cycle: {detail.cycle?.startDate || '-'} to {detail.cycle?.endDate || '-'}</Text>
+          {detail.cycle?.fullEndDate && detail.cycle.fullEndDate !== detail.cycle?.endDate ? (
+            <Text style={styles.meta}>Cycle final end date: {detail.cycle.fullEndDate}</Text>
+          ) : null}
           <Text style={styles.meta}>Fixed paid days: {detail.cycle?.openDaysInMonth || '-'}</Text>
           <Text style={styles.meta}>Payable days: {detail.payableDays} / Present: {detail.presentDays} / Half day: {detail.halfDays || 0}</Text>
           <Text style={styles.meta}>Approved leave: {detail.leaveDays} / Paid holiday: {detail.holidayPaidDays || 0} / Weekly off: {detail.weeklyOffDays || 0}</Text>
@@ -131,7 +142,12 @@ const styles = StyleSheet.create({
   selectedMonthRow: {backgroundColor: colors.primary, borderRadius: 8, borderBottomWidth: 0, marginVertical: spacing.xs, paddingHorizontal: spacing.md},
   selectedMonthText: {color: colors.surface},
   selectedMonthMeta: {color: colors.surface, fontWeight: '800', marginTop: spacing.xs},
-  net: {color: colors.success, fontSize: 20, fontWeight: '900', marginTop: spacing.sm},
+  salaryBox: {backgroundColor: colors.surfaceMuted, borderRadius: 8, marginTop: spacing.sm, padding: spacing.md},
+  salaryBoxFinal: {backgroundColor: colors.success},
+  salaryBoxTitle: {color: colors.textMuted, fontSize: 13, fontWeight: '900'},
+  salaryBoxTitleFinal: {color: colors.surface},
+  salaryBoxAmount: {color: colors.success, fontSize: 22, fontWeight: '900', marginTop: spacing.xs},
+  salaryBoxAmountFinal: {color: colors.surface},
   meta: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
   summary: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginVertical: spacing.md, padding: spacing.md},
   summaryText: {color: colors.textMuted, fontWeight: '800'},

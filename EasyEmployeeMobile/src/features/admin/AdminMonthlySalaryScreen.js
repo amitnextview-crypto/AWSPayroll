@@ -174,7 +174,7 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
           <AppTextInput label="Year" keyboardType="numeric" value={payrollYear} onChangeText={value => setPayrollYear(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
         </View>
         <View style={styles.actions}>
-          <AppButton icon={Calculator} title="Calculate" loading={loading} onPress={loadPayroll} />
+          <AppButton icon={Calculator} title="Search Salaries" loading={loading} onPress={loadPayroll} />
           <AppButton icon={Download} title="Export Past Month Salary" variant="muted" loading={loading} onPress={exportPayroll} />
         </View>
         {payrollCycle ? (
@@ -251,7 +251,7 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
           {selectedMonthDetail ? (
             <Card>
               <Text style={styles.title}>{selectedMonthDetail.monthLabel || `${selectedMonthDetail.month}/${selectedMonthDetail.year}`} Salary Details</Text>
-              <Text style={styles.net}>Total Pay: {formatCurrency(selectedMonthDetail.totalPay || 0)}</Text>
+              <Text style={styles.net}>{selectedMonthDetail.salaryLabel || 'Salary Till Date'}: {formatCurrency(selectedMonthDetail.totalPay || 0)}</Text>
               <Text style={styles.meta}>Assigned monthly net salary: {formatCurrency(selectedMonthDetail.assignedNetPay || 0)}</Text>
               <Text style={styles.meta}>Assigned monthly gross salary: {formatCurrency(selectedMonthDetail.assignedGross || selectedMonthDetail.earnings?.gross || 0)}</Text>
               <Text style={styles.meta}>Per day salary: {formatCurrency(selectedMonthDetail.perDaySalary || 0)}</Text>
@@ -262,6 +262,9 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
               <Text style={styles.meta}>Holiday paid: {selectedMonthDetail.holidayPaidDays || 0} / Absent: {selectedMonthDetail.absentDays}</Text>
               <Text style={styles.meta}>Today: {today.date}/{today.month}/{today.year}</Text>
               <Text style={styles.meta}>Cycle: {selectedMonthDetail.cycle?.startDate} to {selectedMonthDetail.cycle?.endDate} / Master paid days: {selectedMonthDetail.cycle?.openDaysInMonth}</Text>
+              {selectedMonthDetail.cycle?.fullEndDate && selectedMonthDetail.cycle.fullEndDate !== selectedMonthDetail.cycle?.endDate ? (
+                <Text style={styles.meta}>Cycle final end date: {selectedMonthDetail.cycle.fullEndDate}</Text>
+              ) : null}
               <Text style={styles.meta}>Approved expenses: {formatCurrency(selectedMonthDetail.totalExpenses || 0)}</Text>
               <View style={styles.summary}>
                 {[...(selectedMonthDetail.attendanceDetails || [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).map(day => (

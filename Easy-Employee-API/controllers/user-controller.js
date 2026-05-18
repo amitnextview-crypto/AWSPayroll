@@ -62,6 +62,9 @@ const formatIsoDate = date =>
 
 const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
 
+const clampDayToMonth = (year, month, day) =>
+  Math.min(Math.max(Number(day) || 1, 1), daysInMonth(year, month));
+
 const dateRange = (start, end) => {
   const dates = [];
   const cursor = normalizeDateOnly(start);
@@ -71,6 +74,17 @@ const dateRange = (start, end) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+};
+
+const monthYearPairsForRange = (start, end) => {
+  const pairs = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= last) {
+    pairs.push({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return pairs;
 };
 
 const parseTimeToMinutes = value => {
@@ -160,18 +174,26 @@ const getPayrollCycleSettings = async (year, month) => {
   );
   const rules = masterPolicy?.rules?.length ? masterPolicy.rules : fallbackMasterSalaryRules;
   const monthDays = daysInMonth(year, month);
-  const startDay = Math.min(Math.max(getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1), 1), monthDays);
-  const rawEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
-  const endDay = Math.min(Math.max(rawEndDay, 1), monthDays);
+  const requestedStartDay = getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
+  const requestedEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
+  const startDay = Math.min(Math.max(requestedStartDay, 1), 31);
+  const endDay = Math.min(Math.max(requestedEndDay, 1), 31);
   const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours', 'Minimum Full Day Hours'], 7);
   const sundayAutoPaidAbove = getRuleNumber(rules, ['Sunday Auto Paid When Open Days Above'], 26);
   const weeklyOffDays = splitRuleList(getRuleValue(rules, ['Weekly Off Days', 'Weekly Off'], 'Sunday')).map(item => item.toLowerCase());
   const paidHolidayDates = splitRuleList(getRuleValue(rules, ['Paid Holiday Dates', 'Holiday Dates'], '')).map(item => item.toLowerCase());
   const paidHolidayNames = splitRuleList(getRuleValue(rules, ['Paid Holiday Names', 'Festival Holidays', 'National Holidays'], '')).map(item => item.toLowerCase());
-  const startDate = new Date(year, month - 1, startDay);
-  const endDate = new Date(year, month - 1, endDay);
-  const finalStartDate = startDate <= endDate ? startDate : new Date(year, month - 1, 1);
-  const finalEndDate = startDate <= endDate ? endDate : new Date(year, month, 0);
+  const startMonthDate = startDay <= endDay
+    ? new Date(year, month - 1, 1)
+    : new Date(year, month - 2, 1);
+  const startDate = new Date(
+    startMonthDate.getFullYear(),
+    startMonthDate.getMonth(),
+    clampDayToMonth(startMonthDate.getFullYear(), startMonthDate.getMonth() + 1, startDay),
+  );
+  const endDate = new Date(year, month - 1, clampDayToMonth(year, month, endDay));
+  const finalStartDate = startDate;
+  const finalEndDate = endDate;
   const workingDates = dateRange(finalStartDate, finalEndDate).filter(dateObj => {
     const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     return !weeklyOffDays.includes(day);
@@ -463,10 +485,19 @@ class UserController {
     const month = Number(req.query.month || currentDate.getMonth() + 1);
     const today = normalizeDateOnly(currentDate);
     const cycle = await getPayrollCycleSettings(year, month);
-    const effectiveEndDate = cycle.endDate > today ? today : cycle.endDate;
+    let effectiveEndDate = cycle.endDate;
+    if (today < cycle.startDate) {
+      effectiveEndDate = cycle.startDate;
+    } else if (cycle.endDate > today) {
+      effectiveEndDate = today;
+    }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
     const cycleStartIso = formatIsoDate(cycle.startDate);
     const cycleEndIso = formatIsoDate(effectiveEndDate);
+    const fullCycleEndIso = formatIsoDate(cycle.endDate);
+    const isFinalSalary = today >= cycle.endDate;
+    const salaryLabel = isFinalSalary ? 'Final Salary' : 'Salary Till Date';
+    const attendanceRangeQuery = monthYearPairsForRange(cycle.startDate, effectiveEndDate);
     const requestedEmployeeID = req.query.employeeID && mongoose.Types.ObjectId.isValid(req.query.employeeID)
       ? req.query.employeeID
       : '';
@@ -476,7 +507,7 @@ class UserController {
     const [users, salaries, attendances, expenses, approvedLeaves] = await Promise.all([
       User.find(workforceQuery),
       UserSalaries.find({}),
-      Attendance.find({ year, month }),
+      Attendance.find(attendanceRangeQuery.length ? { $or: attendanceRangeQuery } : { year, month }),
       Expense.find({ adminResponse: "Approved" }),
       Leave.find({
         adminResponse: 'Approved',
@@ -487,7 +518,10 @@ class UserController {
 
     const salaryByEmployee = new Map(salaries.map(item => [String(item.employeeID), item]));
     const attendanceByEmployeeDate = new Map(
-      attendances.map(item => [`${String(item.employeeID)}-${item.date}`, item]),
+      attendances.map(item => [
+        `${String(item.employeeID)}-${item.year}-${String(item.month).padStart(2, '0')}-${String(item.date).padStart(2, '0')}`,
+        item,
+      ]),
     );
 
     const paidHolidayDates = cycleDates.filter(dateObj =>
@@ -498,15 +532,18 @@ class UserController {
         paidHolidayDates.map(async dateObj => {
           const employeeId = String(user._id);
           const dayNumber = dateObj.getDate();
+          const dateYear = dateObj.getFullYear();
+          const dateMonth = dateObj.getMonth() + 1;
+          const isoDate = formatIsoDate(dateObj);
           const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-          const key = `${employeeId}-${dayNumber}`;
+          const key = `${employeeId}-${isoDate}`;
           const saved = await Attendance.findOneAndUpdate(
-            { employeeID: user._id, year, month, date: dayNumber },
+            { employeeID: user._id, year: dateYear, month: dateMonth, date: dayNumber },
             {
               $setOnInsert: {
                 employeeID: user._id,
-                year,
-                month,
+                year: dateYear,
+                month: dateMonth,
                 date: dayNumber,
                 day,
                 present: true,
@@ -535,15 +572,18 @@ class UserController {
         .map(async dateObj => {
           const employeeId = String(leave.applicantID);
           const dayNumber = dateObj.getDate();
+          const dateYear = dateObj.getFullYear();
+          const dateMonth = dateObj.getMonth() + 1;
+          const isoDate = formatIsoDate(dateObj);
           const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-          const key = `${employeeId}-${dayNumber}`;
+          const key = `${employeeId}-${isoDate}`;
           const saved = await Attendance.findOneAndUpdate(
-            { employeeID: leave.applicantID, year, month, date: dayNumber },
+            { employeeID: leave.applicantID, year: dateYear, month: dateMonth, date: dayNumber },
             {
               $setOnInsert: {
                 employeeID: leave.applicantID,
-                year,
-                month,
+                year: dateYear,
+                month: dateMonth,
                 date: dayNumber,
                 day,
                 present: true,
@@ -565,8 +605,9 @@ class UserController {
     const results = users.map(user => {
       const employeeId = String(user._id);
       const empSalary = salaryByEmployee.get(employeeId);
-      const assignedNetPay = toNumber(empSalary?.netPay);
       const assignedGross = toNumber(empSalary?.earnings?.gross);
+      const assignedDeductions = toNumber(empSalary?.deductions?.totalDeductions);
+      const assignedNetPay = toNumber(empSalary?.netPay) || Math.max(assignedGross - assignedDeductions, 0);
       const perDaySalary = cycle.openDaysInMonth > 0 ? Number((assignedNetPay / cycle.openDaysInMonth).toFixed(2)) : 0;
       let payableDays = 0;
       let presentDays = 0;
@@ -587,7 +628,7 @@ class UserController {
         const dayLower = day.toLowerCase();
         const isoDate = formatIsoDate(dateObj);
         const isoDateLower = isoDate.toLowerCase();
-        const record = attendanceByEmployeeDate.get(`${employeeId}-${dayNumber}`);
+        const record = attendanceByEmployeeDate.get(`${employeeId}-${isoDate}`);
         const leave = isApprovedLeaveDate(isoDate);
         const isWeeklyOff = cycle.weeklyOffDays.includes(dayLower);
         const holidayName = cycle.paidHolidayNames.find(name => name && (
@@ -607,12 +648,14 @@ class UserController {
           timeStatus = cycle.approvedLeavePaid ? 'Full Time' : 'Unpaid Leave';
           reason = `Approved leave: ${leave.type || leave.title || 'Leave'}`;
           dayValue = cycle.approvedLeavePaid ? 1 : 0;
+          presentDays += dayValue;
           leaveDays += 1;
         } else if (isPaidHoliday) {
           status = 'Present';
           timeStatus = 'Full Time';
           reason = holidayName ? `Paid holiday: ${holidayName}` : 'Paid holiday by master salary rule';
           dayValue = 1;
+          presentDays += 1;
           holidayPaidDays += 1;
         } else if (isWeeklyOff) {
           status = 'Weekly Off';
@@ -633,6 +676,7 @@ class UserController {
             timeStatus = 'Half Time';
             reason = `Worked less than ${cycle.halfTimeMinimumHours} hours`;
             dayValue = cycle.halfDayPayValue;
+            presentDays += dayValue;
             halfDays += 1;
           } else {
             status = status === 'Approved Leave' ? 'Approved Leave' : 'Present';
@@ -681,12 +725,15 @@ class UserController {
         cycle: {
           startDate: cycleStartIso,
           endDate: cycleEndIso,
+          fullEndDate: fullCycleEndIso,
           openDaysInMonth: cycle.openDaysInMonth,
           salaryBasis: cycle.salaryBasis,
           salaryCycleStartDay: cycle.startDay,
           salaryCycleEndDay: cycle.endDay,
           weeklyOffDays: cycle.weeklyOffDays,
           paidHolidayDates: cycle.paidHolidayDates,
+          isFinalSalary,
+          salaryLabel,
         },
         earnings: empSalary?.earnings || { gross: assignedGross },
         deductions: empSalary?.deductions || {},
@@ -695,7 +742,7 @@ class UserController {
         perDaySalary,
         payableDays: Number(payableDays.toFixed(2)),
         attendancePayableDays: Number(payableDays.toFixed(2)),
-        presentDays,
+        presentDays: Number(presentDays.toFixed(2)),
         halfDays,
         leaveDays,
         sundayPaidDays: weeklyOffDays,
@@ -707,6 +754,10 @@ class UserController {
         salaryTillDate,
         totalExpenses,
         totalPay,
+        isFinalSalary,
+        salaryLabel,
+        salaryCalculatedTillDate: cycleEndIso,
+        fullCycleEndDate: fullCycleEndIso,
         attendanceDetails,
       };
     });
@@ -717,12 +768,15 @@ class UserController {
       cycle: {
         startDate: cycleStartIso,
         endDate: cycleEndIso,
+        fullEndDate: fullCycleEndIso,
         openDaysInMonth: cycle.openDaysInMonth,
         salaryBasis: cycle.salaryBasis,
         salaryCycleStartDay: cycle.startDay,
         salaryCycleEndDay: cycle.endDay,
         weeklyOffDays: cycle.weeklyOffDays,
         paidHolidayDates: cycle.paidHolidayDates,
+        isFinalSalary,
+        salaryLabel,
       },
       message: "Monthly cycle salary calculated successfully",
     });
@@ -737,19 +791,22 @@ class UserController {
 };
 
   calculateMyMonthlySalary = async (req, res) => {
+    const employeeID = String(req.user?._id || '');
+    if (!employeeID) {
+      return res.status(401).json({ success: false, message: 'Login required to view monthly salary' });
+    }
     const originalJson = res.json.bind(res);
     let payload = null;
     res.json = data => {
       payload = data;
       return data;
     };
-    req.query = { ...(req.query || {}), employeeID: String(req.user?._id || req.query?.employeeID || '') };
+    req.query = { ...(req.query || {}), employeeID };
     await this.calculateCurrentMonthSalaries(req, res);
     res.json = originalJson;
     if (!payload?.success) {
       return res.status(500).json(payload || { success: false, message: 'Salary calculation failed' });
     }
-    const employeeID = String(req.user?._id || req.query.employeeID || '');
     const detail = (payload.data || []).find(item => String(item.employeeID) === employeeID);
     if (!detail) {
       return res.status(404).json({ success: false, message: 'Monthly salary details not found' });
