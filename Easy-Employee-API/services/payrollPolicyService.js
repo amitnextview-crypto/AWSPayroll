@@ -2,6 +2,27 @@ const PayrollPolicyModel = require('../models/payroll-policy-model');
 
 const defaultPolicies = [
   {
+    title: 'Master Salary Rule',
+    category: 'Master Salary Rule',
+    sortOrder: 0,
+    isDefault: true,
+    description: 'Controls monthly employee and leader salary calculation from attendance, approved leave, weekly off, and paid holidays.',
+    rules: [
+      ['Salary Basis Days', 'Full Month'],
+      ['Fixed Paid Days', '26'],
+      ['Salary Cycle Start Day', '1'],
+      ['Salary Cycle End Day', '31'],
+      ['Weekly Off Days', 'Sunday'],
+      ['Approved Leave Paid', 'Yes'],
+      ['Paid Holiday Dates', '2026-01-26, 2026-08-15, 2026-10-02'],
+      ['Paid Holiday Names', 'Republic Day, Independence Day, Gandhi Jayanti, Diwali, Holi, Makar Sankranti'],
+      ['Minimum Full Day Hours', '7'],
+      ['Half Day Pay Value', '0.5'],
+      ['Absent Pay Value', '0'],
+      ['Expense Reimbursement Paid', 'Yes'],
+    ],
+  },
+  {
     title: 'Attendance Policy',
     category: 'Attendance',
     sortOrder: 1,

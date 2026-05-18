@@ -119,25 +119,72 @@ const getRuleNumber = (rules, labels, fallback) => {
   return Number.isFinite(number) ? number : fallback;
 };
 
+const getRuleValue = (rules, labels, fallback = '') => {
+  const lowerLabels = labels.map(label => label.toLowerCase());
+  const rule = rules.find(item => lowerLabels.includes(String(item.label || '').trim().toLowerCase()));
+  return rule ? String(rule.value || '').trim() : fallback;
+};
+
+const getRuleBoolean = (rules, labels, fallback = false) => {
+  const value = getRuleValue(rules, labels, fallback ? 'Yes' : 'No').toLowerCase();
+  if (['yes', 'true', 'paid', '1', 'allow', 'allowed'].some(item => value.includes(item))) return true;
+  if (['no', 'false', 'unpaid', '0', 'deny'].some(item => value.includes(item))) return false;
+  return fallback;
+};
+
+const splitRuleList = value =>
+  String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+
 const getPayrollCycleSettings = async (year, month) => {
   const policies = await PayrollPolicy.find({ status: 'active' });
-  const rules = policies.flatMap(policy => policy.rules || []);
+  const masterPolicy = policies.find(policy =>
+    String(policy.category || '').toLowerCase() === 'master salary rule' ||
+    String(policy.title || '').toLowerCase() === 'master salary rule'
+  );
+  const rules = [
+    ...(masterPolicy?.rules || []),
+    ...policies.filter(policy => String(policy._id) !== String(masterPolicy?._id)).flatMap(policy => policy.rules || []),
+  ];
   const monthDays = daysInMonth(year, month);
   const rawOpenDays = rules.find(rule => /office open days/i.test(rule.label || ''))?.value;
   const parsedOpenDays = Number(String(rawOpenDays || '').match(/\d+/)?.[0]);
-  const openDaysInMonth = Number.isFinite(parsedOpenDays) ? parsedOpenDays : monthDays;
+  const salaryBasis = getRuleValue(rules, ['Salary Basis Days', 'Monthly Salary Basis'], '').toLowerCase();
+  const salaryBasisDays = Number(String(salaryBasis || '').match(/\d+/)?.[0]);
+  const fixedPaidDays = getRuleNumber(rules, ['Fixed Paid Days', 'Office Open Days In Month', 'Salary Paid Days'], parsedOpenDays || monthDays);
+  const openDaysInMonth = Number.isFinite(salaryBasisDays)
+    ? salaryBasisDays
+    : salaryBasis.includes('fixed')
+      ? fixedPaidDays
+      : Number.isFinite(parsedOpenDays)
+        ? parsedOpenDays
+        : monthDays;
   const startDay = Math.min(Math.max(getRuleNumber(rules, ['Salary Cycle Start Day', 'Cycle Start Day'], 1), 1), monthDays);
   const rawEndDay = getRuleNumber(rules, ['Salary Cycle End Day', 'Cycle End Day'], monthDays);
   const endDay = Math.min(Math.max(rawEndDay, 1), monthDays);
-  const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours'], 7);
+  const halfTimeMinimumHours = getRuleNumber(rules, ['Half Time Minimum Hours', 'Minimum Full Time Hours', 'Minimum Full Day Hours'], 7);
   const sundayAutoPaidAbove = getRuleNumber(rules, ['Sunday Auto Paid When Open Days Above'], 26);
+  const weeklyOffDays = splitRuleList(getRuleValue(rules, ['Weekly Off Days', 'Weekly Off'], 'Sunday')).map(item => item.toLowerCase());
+  const paidHolidayDates = splitRuleList(getRuleValue(rules, ['Paid Holiday Dates', 'Holiday Dates'], '')).map(item => item.toLowerCase());
+  const paidHolidayNames = splitRuleList(getRuleValue(rules, ['Paid Holiday Names', 'Festival Holidays', 'National Holidays'], '')).map(item => item.toLowerCase());
   const startDate = new Date(year, month - 1, startDay);
   const endDate = new Date(year, month - 1, endDay);
   return {
     openDaysInMonth,
+    salaryBasis: salaryBasis || (Number.isFinite(parsedOpenDays) ? `${openDaysInMonth} days` : 'Full Month'),
+    fixedPaidDays,
     startDay,
     endDay,
     halfTimeMinimumHours,
+    halfDayPayValue: getRuleNumber(rules, ['Half Day Pay Value'], 0.5),
+    absentPayValue: getRuleNumber(rules, ['Absent Pay Value'], 0),
+    approvedLeavePaid: getRuleBoolean(rules, ['Approved Leave Paid', 'Approved Leave Attendance'], true),
+    expenseReimbursementPaid: getRuleBoolean(rules, ['Expense Reimbursement Paid'], true),
+    weeklyOffDays,
+    paidHolidayDates,
+    paidHolidayNames,
     sundayAutoPaidAbove,
     startDate: startDate <= endDate ? startDate : new Date(year, month - 1, 1),
     endDate: startDate <= endDate ? endDate : new Date(year, month, 0),
@@ -432,12 +479,15 @@ class UserController {
       attendances.map(item => [`${String(item.employeeID)}-${item.date}`, item]),
     );
 
-    if (cycle.openDaysInMonth > cycle.sundayAutoPaidAbove) {
-      const sundayDates = cycleDates.filter(dateObj => dateObj.getDay() === 0);
+    if (cycle.weeklyOffDays.length) {
+      const weeklyOffDates = cycleDates.filter(dateObj =>
+        cycle.weeklyOffDays.includes(dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase())
+      );
       await Promise.all(users.flatMap(user =>
-        sundayDates.map(async dateObj => {
+        weeklyOffDates.map(async dateObj => {
           const employeeId = String(user._id);
           const dayNumber = dateObj.getDate();
+          const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
           const key = `${employeeId}-${dayNumber}`;
           if (attendanceByEmployeeDate.has(key)) return;
           const saved = await Attendance.findOneAndUpdate(
@@ -448,7 +498,7 @@ class UserController {
                 year,
                 month,
                 date: dayNumber,
-                day: 'Sunday',
+                day,
                 present: true,
                 status: 'Present',
                 attendanceIn: 'Weekly Off',
@@ -456,7 +506,7 @@ class UserController {
                 late: 'No',
                 totalHours: '0',
                 timeStatus: 'Full Time',
-                reason: 'Sunday auto paid by salary policy',
+                reason: `${day} weekly off paid by master salary rule`,
               },
             },
             { upsert: true, new: true },
@@ -476,7 +526,8 @@ class UserController {
       let presentDays = 0;
       let halfDays = 0;
       let leaveDays = 0;
-      let sundayPaidDays = 0;
+      let weeklyOffPaidDays = 0;
+      let holidayPaidDays = 0;
       let absentDays = 0;
 
       const attendanceDetails = cycleDates.map(dateObj => {
@@ -484,12 +535,19 @@ class UserController {
         const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
         const dayLower = day.toLowerCase();
         const isoDate = formatIsoDate(dateObj);
+        const isoDateLower = isoDate.toLowerCase();
         const record = attendanceByEmployeeDate.get(`${employeeId}-${dayNumber}`);
         const leave = approvedLeaves.find(item =>
           String(item.applicantID) === employeeId &&
           item.startDate <= isoDate &&
           item.endDate >= isoDate
         );
+        const isWeeklyOff = cycle.weeklyOffDays.includes(dayLower);
+        const holidayName = cycle.paidHolidayNames.find(name => name && (
+          String(record?.reason || '').toLowerCase().includes(name) ||
+          String(record?.day || '').toLowerCase().includes(name)
+        ));
+        const isPaidHoliday = cycle.paidHolidayDates.includes(isoDateLower) || Boolean(holidayName);
 
         let status = 'Absent';
         let timeStatus = '-';
@@ -499,25 +557,35 @@ class UserController {
 
         if (leave) {
           status = 'Approved Leave';
-          timeStatus = 'Full Time';
+          timeStatus = cycle.approvedLeavePaid ? 'Full Time' : 'Unpaid Leave';
           reason = `Approved leave: ${leave.type || leave.title || 'Leave'}`;
-          dayValue = 1;
+          dayValue = cycle.approvedLeavePaid ? 1 : 0;
           leaveDays += 1;
-        } else if (dayLower === 'sunday' && cycle.openDaysInMonth > cycle.sundayAutoPaidAbove) {
+        } else if (isPaidHoliday) {
           status = 'Present';
           timeStatus = 'Full Time';
-          reason = 'Sunday auto paid by salary policy';
+          reason = holidayName ? `Paid holiday: ${holidayName}` : 'Paid holiday by master salary rule';
           dayValue = 1;
-          sundayPaidDays += 1;
+          holidayPaidDays += 1;
+        } else if (isWeeklyOff) {
+          status = 'Present';
+          timeStatus = 'Full Time';
+          reason = `${day} weekly off paid by master salary rule`;
+          dayValue = 1;
+          weeklyOffPaidDays += 1;
         } else if (record?.present) {
           totalHours = toNumber(record.totalHours) || hoursBetweenTimes(record.attendanceIn, record.attendanceOut);
           timeStatus = record.timeStatus || timeStatusFromHours(day, totalHours, record.status);
           status = record.status || attendanceStatusFromTime(day, totalHours, record.status);
+          if (totalHours > 0 && totalHours < cycle.halfTimeMinimumHours && status !== 'Approved Leave') {
+            timeStatus = 'Half Time';
+            status = 'Half Day';
+          }
           if (timeStatus === 'Half Time' || status === 'Half Day') {
             status = 'Half Day';
             timeStatus = 'Half Time';
-            reason = 'Worked less than 7 hours';
-            dayValue = 0.5;
+            reason = `Worked less than ${cycle.halfTimeMinimumHours} hours`;
+            dayValue = cycle.halfDayPayValue;
             halfDays += 1;
           } else {
             status = status === 'Approved Leave' ? 'Approved Leave' : 'Present';
@@ -526,11 +594,14 @@ class UserController {
             dayValue = 1;
             presentDays += 1;
           }
-        } else if (dayLower === 'sunday') {
+        } else if (isWeeklyOff) {
           status = 'Holiday';
           timeStatus = 'Holiday';
           reason = 'Weekly off';
+          dayValue = 1;
+          weeklyOffPaidDays += 1;
         } else {
+          dayValue = cycle.absentPayValue;
           absentDays += 1;
         }
 
@@ -552,7 +623,9 @@ class UserController {
         const appliedDate = item.appliedDate;
         return String(item.employeeID) === employeeId && appliedDate >= cycleStartIso && appliedDate <= cycleEndIso;
       });
-      const totalExpenses = approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0);
+      const totalExpenses = cycle.expenseReimbursementPaid
+        ? approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0)
+        : 0;
       const salaryTillDate = Number((payableDays * perDaySalary).toFixed(2));
       const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
 
@@ -568,8 +641,11 @@ class UserController {
           startDate: cycleStartIso,
           endDate: cycleEndIso,
           openDaysInMonth: cycle.openDaysInMonth,
+          salaryBasis: cycle.salaryBasis,
           salaryCycleStartDay: cycle.startDay,
           salaryCycleEndDay: cycle.endDay,
+          weeklyOffDays: cycle.weeklyOffDays,
+          paidHolidayDates: cycle.paidHolidayDates,
         },
         earnings: empSalary?.earnings || { gross: assignedGross },
         deductions: empSalary?.deductions || {},
@@ -580,7 +656,9 @@ class UserController {
         presentDays,
         halfDays,
         leaveDays,
-        sundayPaidDays,
+        sundayPaidDays: weeklyOffPaidDays,
+        weeklyOffPaidDays,
+        holidayPaidDays,
         absentDays,
         salaryTillDate,
         totalExpenses,
@@ -596,8 +674,11 @@ class UserController {
         startDate: cycleStartIso,
         endDate: cycleEndIso,
         openDaysInMonth: cycle.openDaysInMonth,
+        salaryBasis: cycle.salaryBasis,
         salaryCycleStartDay: cycle.startDay,
         salaryCycleEndDay: cycle.endDay,
+        weeklyOffDays: cycle.weeklyOffDays,
+        paidHolidayDates: cycle.paidHolidayDates,
       },
       message: "Monthly cycle salary calculated successfully",
     });
@@ -639,7 +720,8 @@ class UserController {
         'Present Days',
         'Half Days',
         'Approved Leave Days',
-        'Sunday Paid Days',
+        'Weekly Off Paid Days',
+        'Paid Holiday Days',
         'Absent Days',
         'Salary Till Date',
         'Approved Expenses',
@@ -660,7 +742,8 @@ class UserController {
         item.presentDays,
         item.halfDays,
         item.leaveDays,
-        item.sundayPaidDays,
+        item.weeklyOffPaidDays ?? item.sundayPaidDays,
+        item.holidayPaidDays,
         item.absentDays,
         item.salaryTillDate,
         item.totalExpenses,

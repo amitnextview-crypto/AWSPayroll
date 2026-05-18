@@ -53,6 +53,8 @@ export const AdminAttendanceScreen = ({route}) => {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [records, setRecords] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [todayRecords, setTodayRecords] = useState([]);
+  const [todayLeaves, setTodayLeaves] = useState([]);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState(route?.params?.date ? String(route.params.date) : '');
   const [monthFilter, setMonthFilter] = useState(String(today.month));
@@ -83,6 +85,19 @@ export const AdminAttendanceScreen = ({route}) => {
     }
   };
 
+  const loadTodayAbsences = async () => {
+    try {
+      const [attendanceResponse, leavesResponse] = await Promise.all([
+        getAdminAttendance({month: today.month, year: today.year, date: today.date}),
+        getAdminLeaves({}),
+      ]);
+      setTodayRecords(attendanceResponse?.data || []);
+      setTodayLeaves(leavesResponse?.data || []);
+    } catch (err) {
+      setError(err.message || 'Today absent list could not be loaded.');
+    }
+  };
+
   const loadAttendance = async () => {
     if (!selectedEmployeeId) return;
     setLoading(true);
@@ -103,6 +118,7 @@ export const AdminAttendanceScreen = ({route}) => {
 
   useEffect(() => {
     loadEmployees();
+    loadTodayAbsences();
   }, [route?.params?.employeeID]);
 
   useEffect(() => {
@@ -136,6 +152,8 @@ export const AdminAttendanceScreen = ({route}) => {
         key: `${year}-${month}-${date}`,
         id: record?._id || record?.id || '',
         employeeID: selectedEmployeeId,
+        month,
+        year,
         name: selectedEmployee.name || selectedEmployee.username || '-',
         email: selectedEmployee.email || '-',
         date,
@@ -153,6 +171,45 @@ export const AdminAttendanceScreen = ({route}) => {
     const visibleRows = selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
     return visibleRows.sort((a, b) => b.date - a.date);
   }, [dateFilter, leaves, month, records, selectedEmployee, today, year]);
+
+  const todayAbsentRows = useMemo(() => {
+    const todayIso = apiDate(today.year, today.month, today.date);
+    const approvedLeaveIds = new Set(
+      todayLeaves
+        .filter(item => item.adminResponse === 'Approved' && item.startDate <= todayIso && item.endDate >= todayIso)
+        .map(item => String(item.applicantID)),
+    );
+    const recordByEmployee = new Map(todayRecords.map(item => [String(item.employeeID), item]));
+    return employees
+      .filter(employee => {
+        const employeeId = idOf(employee);
+        const record = recordByEmployee.get(employeeId);
+        return !approvedLeaveIds.has(employeeId) && (!record || !record.present);
+      })
+      .map(employee => {
+        const employeeId = idOf(employee);
+        const record = recordByEmployee.get(employeeId);
+        const day = dayNames[new Date(today.year, today.month - 1, today.date).getDay()];
+        return {
+          key: `today-absent-${employeeId}`,
+          id: record?._id || record?.id || '',
+          employeeID: employeeId,
+          month: today.month,
+          year: today.year,
+          name: employee.name || employee.username || '-',
+          email: employee.email || '-',
+          date: today.date,
+          day: record?.day || day,
+          status: record?.status || 'Absent',
+          attendanceIn: record?.attendanceIn || '-',
+          attendanceOut: record?.attendanceOut || '-',
+          late: record?.late || '-',
+          totalHours: record?.totalHours || '-',
+          timeStatus: record?.timeStatus || '-',
+          reason: record?.reason || 'Check-in not recorded',
+        };
+      });
+  }, [employees, today, todayLeaves, todayRecords]);
 
   const startEdit = row => {
     setEditingKey(row.key);
@@ -176,8 +233,8 @@ export const AdminAttendanceScreen = ({route}) => {
         id: row.id || undefined,
         employeeID: row.employeeID,
         date: row.date,
-        month,
-        year,
+        month: row.month || month,
+        year: row.year || year,
         day: row.day,
         present,
         status: editForm.status,
@@ -188,6 +245,7 @@ export const AdminAttendanceScreen = ({route}) => {
       });
       setEditingKey('');
       await loadAttendance();
+      await loadTodayAbsences();
     } catch (err) {
       setError(err.message || 'Attendance could not be updated.');
     } finally {
@@ -205,6 +263,7 @@ export const AdminAttendanceScreen = ({route}) => {
     try {
       await deleteAdminAttendance(row.id);
       await loadAttendance();
+      await loadTodayAbsences();
     } catch (err) {
       setError(err.message || 'Attendance could not be deleted.');
     } finally {
@@ -232,6 +291,49 @@ export const AdminAttendanceScreen = ({route}) => {
       </Card>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <Card>
+        <Text style={styles.section}>Absent Today</Text>
+        <Text style={styles.meta}>{displayDate(today.year, today.month, today.date)} / {todayAbsentRows.length} employee or leader absent</Text>
+        <ScrollView nestedScrollEnabled style={styles.absentList}>
+          {todayAbsentRows.map(row => (
+            <View key={row.key} style={styles.absentRow}>
+              <View style={styles.flex}>
+                <Text style={styles.name}>{row.name}</Text>
+                <Text style={styles.meta}>{row.email}</Text>
+                <Text style={styles.meta}>ID: {row.employeeID}</Text>
+                <Text style={styles.meta}>Reason: {row.reason}</Text>
+              </View>
+              <AppButton
+                icon={Edit3}
+                title={editingKey === row.key ? 'Editing' : 'Edit'}
+                variant="muted"
+                onPress={() => {
+                  setSelectedEmployeeId(row.employeeID);
+                  setDateFilter(String(today.date));
+                  setMonthFilter(String(today.month));
+                  setYearFilter(String(today.year));
+                  startEdit(row);
+                }}
+              />
+              {editingKey === row.key ? (
+                <View style={styles.inlineEdit}>
+                  <AppTextInput label="Status (Present, Half Day, Leave, Absent)" value={editForm.status} onChangeText={value => setEdit('status', value)} />
+                  <View style={styles.twoCol}>
+                    <AppTextInput label="In Time" placeholder="09:30 AM" value={editForm.attendanceIn} onChangeText={value => setEdit('attendanceIn', value)} style={styles.flex} />
+                    <AppTextInput label="Out Time" placeholder="06:30 PM" value={editForm.attendanceOut} onChangeText={value => setEdit('attendanceOut', value)} style={styles.flex} />
+                  </View>
+                  <View style={styles.actions}>
+                    <AppButton icon={Check} title="Update" loading={loading} onPress={() => saveAttendance(row)} />
+                    <AppButton icon={X} title="Cancel" variant="muted" onPress={() => setEditingKey('')} />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </ScrollView>
+        {!todayAbsentRows.length ? <Text style={styles.empty}>No absent employees today.</Text> : null}
+      </Card>
 
       <Card>
         <Text style={styles.section}>Select Employee</Text>
@@ -317,6 +419,9 @@ const styles = StyleSheet.create({
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   employeeList: {maxHeight: 246},
+  absentList: {maxHeight: 330, marginTop: spacing.sm},
+  absentRow: {borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.sm, paddingVertical: spacing.sm},
+  inlineEdit: {gap: spacing.sm, marginTop: spacing.sm},
   employeeRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
   editBox: {gap: spacing.sm, marginTop: spacing.md},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},

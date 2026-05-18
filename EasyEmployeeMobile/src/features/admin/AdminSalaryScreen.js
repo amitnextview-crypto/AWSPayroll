@@ -1,12 +1,10 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Alert, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {Calculator, Download, Edit3, Trash2} from 'lucide-react-native';
+import {Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {Calculator, Download} from 'lucide-react-native';
 import {
   calculateCurrentMonthSalaries,
-  deleteAdminSalary,
   exportAdminMonthlySalaries,
   getAdminAllUsers,
-  getAdminSalaries,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
@@ -20,20 +18,22 @@ import {todayParts} from '../../utils/date';
 
 const idOf = item => String(item?.id || item?._id || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
-const salaryEmployeeId = salary => {
-  const employee = salary?.employeeID || salary?.employee || salary?.user;
-  return typeof employee === 'object' ? idOf(employee) : String(employee || '');
+const monthKey = item => `${item.year}-${String(item.month).padStart(2, '0')}`;
+
+const parseJoiningDate = employee => {
+  const parsed = new Date(employee?.date || employee?.joiningDate || employee?.createdAt || '');
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
 export const AdminSalaryScreen = ({navigation}) => {
   const [employees, setEmployees] = useState([]);
-  const [salaries, setSalaries] = useState([]);
   const today = useMemo(() => todayParts(), []);
   const [payrollMonth, setPayrollMonth] = useState(String(today.month));
   const [payrollYear, setPayrollYear] = useState(String(today.year));
   const [payrollRows, setPayrollRows] = useState([]);
   const [payrollCycle, setPayrollCycle] = useState(null);
-  const [selectedPayroll, setSelectedPayroll] = useState(null);
+  const [selectedMonthlyEmployee, setSelectedMonthlyEmployee] = useState(null);
+  const [selectedMonthDetail, setSelectedMonthDetail] = useState(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
@@ -42,14 +42,10 @@ export const AdminSalaryScreen = ({navigation}) => {
     setLoading(true);
     setToast('');
     try {
-      const [employeeResponse, salaryResponse] = await Promise.all([
-        getAdminAllUsers(),
-        getAdminSalaries({}),
-      ]);
+      const employeeResponse = await getAdminAllUsers();
       setEmployees((employeeResponse?.data || []).filter(isWorkforce));
-      setSalaries(salaryResponse?.data || salaryResponse?.salaries || []);
     } catch (err) {
-      setToast(err.message || 'Salaries could not be loaded.');
+      setToast(err.message || 'Employees could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -65,7 +61,7 @@ export const AdminSalaryScreen = ({navigation}) => {
       });
       setPayrollRows(response?.data || []);
       setPayrollCycle(response?.cycle || null);
-      setSelectedPayroll(null);
+      setSelectedMonthDetail(null);
     } catch (err) {
       setToast(err.message || 'Monthly salaries could not be calculated.');
     } finally {
@@ -96,29 +92,6 @@ export const AdminSalaryScreen = ({navigation}) => {
     loadPayroll();
   }, []);
 
-  const rows = useMemo(() => {
-    const salaryByEmployee = new Map(salaries.map(salary => [salaryEmployeeId(salary), salary]));
-    const employeeRows = employees.map(employee => ({
-      employee,
-      salary: salaryByEmployee.get(idOf(employee)),
-    }));
-    const employeeIds = new Set(employeeRows.map(row => idOf(row.employee)));
-    const orphanSalaryRows = salaries
-      .filter(salary => !employeeIds.has(salaryEmployeeId(salary)))
-      .map(salary => ({employee: salary.employeeID || salary.employee || salary.user || {}, salary}));
-    return [...employeeRows, ...orphanSalaryRows];
-  }, [employees, salaries]);
-
-  const visibleRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(({employee, salary}) =>
-      `${employee?.name || salary?.name || ''} ${employee?.email || ''} ${employee?.username || ''} ${employee?.employeeCode || ''} ${idOf(employee)} ${salaryEmployeeId(salary)}`
-        .toLowerCase()
-        .includes(term),
-    );
-  }, [rows, search]);
-
   const visiblePayrollRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return payrollRows;
@@ -129,40 +102,64 @@ export const AdminSalaryScreen = ({navigation}) => {
     );
   }, [payrollRows, search]);
 
-  const selectRow = row => {
-    navigation.navigate('AdminAssignSalary', {employee: row.employee, salary: row.salary});
-  };
-
-  const confirmDelete = row => {
-    const target = row;
-    const salaryId = idOf(target?.salary);
-    if (!salaryId) {
-      setToast('No assigned salary found for this employee.');
-      return;
+  const monthOptions = useMemo(() => {
+    if (!selectedMonthlyEmployee) return [];
+    const current = new Date(today.year, today.month - 1, 1);
+    const oneYearStart = new Date(current);
+    oneYearStart.setMonth(current.getMonth() - 11);
+    const joiningDate = parseJoiningDate(selectedMonthlyEmployee);
+    const joiningMonth = joiningDate ? new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1) : oneYearStart;
+    const start = joiningMonth > oneYearStart ? joiningMonth : oneYearStart;
+    const months = [];
+    for (let index = 0; index < 12; index += 1) {
+      const date = new Date(current);
+      date.setMonth(current.getMonth() - index);
+      if (date < start) break;
+      months.push({
+        month: date.getMonth() + 1,
+        year: date.getFullYear(),
+        label: date.toLocaleDateString('en-US', {month: 'long', year: 'numeric'}),
+      });
     }
-    Alert.alert('Delete salary', `Delete salary for ${target?.employee?.name || 'this employee'}?`, [
-      {text: 'Cancel', style: 'cancel'},
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            await deleteAdminSalary(salaryId);
-            await load();
-            setToast('Salary deleted successfully.');
-          } catch (err) {
-            setToast(err.message || 'Salary could not be deleted.');
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
+    return months;
+  }, [selectedMonthlyEmployee, today]);
+
+  const monthlyEmployeeRows = useMemo(() => {
+    const payrollByEmployee = new Map(payrollRows.map(item => [String(item.employeeID), item]));
+    return employees.map(employee => ({
+      employee,
+      payroll: payrollByEmployee.get(idOf(employee)),
+    }));
+  }, [employees, payrollRows]);
+
+  const visibleMonthlyEmployees = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return monthlyEmployeeRows;
+    return monthlyEmployeeRows.filter(({employee}) =>
+      `${employee?.name || ''} ${employee?.email || ''} ${employee?.username || ''} ${employee?.employeeCode || ''} ${idOf(employee)}`
+        .toLowerCase()
+        .includes(term),
+    );
+  }, [monthlyEmployeeRows, search]);
+
+  const openMonthDetail = async option => {
+    if (!selectedMonthlyEmployee) return;
+    setLoading(true);
+    setToast('');
+    try {
+      const response = await calculateCurrentMonthSalaries({month: option.month, year: option.year});
+      const detail = (response?.data || []).find(item => String(item.employeeID) === idOf(selectedMonthlyEmployee));
+      setSelectedMonthDetail(detail ? {...detail, monthLabel: option.label, selectedMonthKey: monthKey(option), cycle: detail.cycle || response?.cycle} : null);
+      if (!detail) setToast('Salary details not found for selected employee/month.');
+    } catch (err) {
+      setToast(err.message || 'Month salary details could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+    <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadPayroll(); }} />}>
       <ToastBanner message={toast} type={toast.includes('success') ? 'success' : 'error'} onHide={() => setToast('')} />
 
       <Card>
@@ -177,93 +174,97 @@ export const AdminSalaryScreen = ({navigation}) => {
           <AppButton icon={Download} title="Export Past Month Salary" variant="muted" loading={loading} onPress={exportPayroll} />
         </View>
         {payrollCycle ? (
-          <Text style={styles.count}>Cycle: {payrollCycle.startDate} to {payrollCycle.endDate} / Open days: {payrollCycle.openDaysInMonth}</Text>
+          <Text style={styles.count}>
+            Cycle: {payrollCycle.startDate} to {payrollCycle.endDate} / Basis: {payrollCycle.salaryBasis || 'Full Month'} / Paid days: {payrollCycle.openDaysInMonth}
+          </Text>
         ) : null}
         <Text style={styles.count}>{visiblePayrollRows.length} monthly salary records</Text>
       </Card>
 
-      {visiblePayrollRows.map(item => (
-        <Card key={String(item.employeeID)}>
-          <View style={styles.headingRow}>
-            <View style={styles.flex}>
-              <Text style={styles.name}>{item.name || 'Employee'}</Text>
-              <Text style={styles.meta}>Email: {item.email || '-'}</Text>
-              <Text style={styles.meta}>Employee ID: {item.username || item.employeeCode || String(item.employeeID)}</Text>
-            </View>
-            <Text style={[styles.badge, styles.assigned]}>{formatCurrency(item.totalPay || 0)}</Text>
-          </View>
-          <Text style={styles.meta}>Payable days: {item.payableDays} / Half days: {item.halfDays} / Leave: {item.leaveDays}</Text>
-          <Text style={styles.meta}>Per day: {formatCurrency(item.perDaySalary || 0)} / Salary: {formatCurrency(item.salaryTillDate || 0)} / Expenses: {formatCurrency(item.totalExpenses || 0)}</Text>
-          <View style={styles.actions}>
-            <AppButton title={String(selectedPayroll?.employeeID) === String(item.employeeID) ? 'Hide Details' : 'View Details'} variant="muted" onPress={() => setSelectedPayroll(String(selectedPayroll?.employeeID) === String(item.employeeID) ? null : item)} />
-          </View>
-          {String(selectedPayroll?.employeeID) === String(item.employeeID) ? (
-            <View style={styles.summary}>
-              <Text style={styles.net}>Total Pay: {formatCurrency(item.totalPay || 0)}</Text>
-              <Text style={styles.summaryText}>Assigned Net Salary: {formatCurrency(item.assignedNetPay || 0)}</Text>
-              <Text style={styles.summaryText}>Cycle: {item.cycle?.startDate} to {item.cycle?.endDate}</Text>
-              <Text style={styles.summaryText}>Present: {item.presentDays}, Half: {item.halfDays}, Approved Leave: {item.leaveDays}, Sunday Paid: {item.sundayPaidDays}, Absent: {item.absentDays}</Text>
-              {(item.attendanceDetails || []).map(day => (
-                <Text key={day.date} style={styles.summaryText}>
-                  {day.date} {day.day}: {day.status} / {day.timeStatus} / {day.payableDays} day / {day.reason}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-        </Card>
-      ))}
-
-      <Card>
-        <Text style={styles.title}>Assigned Salary Structures</Text>
-        <Text style={styles.count}>{visibleRows.length} employees</Text>
-      </Card>
-
-      {visibleRows.map(({employee, salary}) => {
-        const earnings = salary?.earnings || {};
-        const deductions = salary?.deductions || {};
-        return (
-          <Card key={idOf(employee) || idOf(salary)}>
+      {!selectedMonthlyEmployee ? (
+        <>
+          <Card>
+            <Text style={styles.title}>Employees and Leaders</Text>
+            <Text style={styles.count}>Tap an employee to view month-wise salary.</Text>
+          </Card>
+          {visibleMonthlyEmployees.map(({employee, payroll}) => (
+            <Pressable
+              key={idOf(employee)}
+              onPress={() => {
+                setSelectedMonthlyEmployee(employee);
+                setSelectedMonthDetail(null);
+              }}>
+              <Card>
+                <View style={styles.headingRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.name}>{employee?.name || employee?.username || 'Employee'}</Text>
+                    <Text style={styles.meta}>Email: {employee?.email || '-'}</Text>
+                    <Text style={styles.meta}>Employee ID: {employee?.username || employee?.employeeCode || idOf(employee)}</Text>
+                  </View>
+                  <Text style={[styles.badge, payroll ? styles.assigned : styles.unassigned]}>
+                    {payroll ? formatCurrency(payroll.totalPay || 0) : 'No salary'}
+                  </Text>
+                </View>
+              </Card>
+            </Pressable>
+          ))}
+        </>
+      ) : (
+        <>
+          <Card>
             <View style={styles.headingRow}>
               <View style={styles.flex}>
-                <Text style={styles.name}>{employee?.name || employee?.username || 'Employee'}</Text>
-                <Text style={styles.meta}>Employee ID: {employee?.username || idOf(employee) || '-'}</Text>
-                <Text style={styles.meta}>Email: {employee?.email || '-'}</Text>
-                <Text style={styles.meta}>Code: {employee?.employeeCode || '-'}</Text>
+                <Text style={styles.title}>{selectedMonthlyEmployee.name || selectedMonthlyEmployee.username}</Text>
+                <Text style={styles.meta}>Email: {selectedMonthlyEmployee.email || '-'}</Text>
+                <Text style={styles.meta}>Employee ID: {selectedMonthlyEmployee.username || selectedMonthlyEmployee.employeeCode || idOf(selectedMonthlyEmployee)}</Text>
+                <Text style={styles.meta}>Joining Date: {selectedMonthlyEmployee.date || '-'}</Text>
               </View>
-              <Text style={[styles.badge, salary ? styles.assigned : styles.unassigned]}>
-                {salary ? 'Assigned' : 'Not assigned'}
-              </Text>
-            </View>
-
-            <View style={styles.details}>
-              <Text style={styles.meta}>Basic: {formatCurrency(earnings.basic || 0)}</Text>
-              <Text style={styles.meta}>HRA: {formatCurrency(earnings.hra || 0)}</Text>
-              <Text style={styles.meta}>Conveyance: {formatCurrency(earnings.conveyance || 0)}</Text>
-              <Text style={styles.meta}>Medical: {formatCurrency(earnings.medical || 0)}</Text>
-              <Text style={styles.meta}>Special Allowance: {formatCurrency(earnings.specialAllowance || 0)}</Text>
-              <Text style={styles.meta}>Bonus: {formatCurrency(earnings.bonus || 0)}</Text>
-              <Text style={styles.meta}>Other Benefits: {formatCurrency(earnings.otherBenefits || 0)}</Text>
-              <Text style={styles.meta}>Gross: {formatCurrency(earnings.gross || 0)}</Text>
-              <Text style={styles.meta}>PF Employee: {formatCurrency(deductions.pfEmployee || 0)}</Text>
-              <Text style={styles.meta}>PF Employer: {formatCurrency(deductions.pfEmployer || 0)}</Text>
-              <Text style={styles.meta}>ESI Employee: {formatCurrency(deductions.esiEmployee || 0)}</Text>
-              <Text style={styles.meta}>ESI Employer: {formatCurrency(deductions.esiEmployer || 0)}</Text>
-              <Text style={styles.meta}>Professional Tax: {formatCurrency(deductions.professionalTax || 0)}</Text>
-              <Text style={styles.meta}>Loan Recovery: {formatCurrency(deductions.loanRecovery || 0)}</Text>
-              <Text style={styles.meta}>TDS Monthly: {formatCurrency(deductions.tdsMonthly || 0)}</Text>
-              <Text style={styles.meta}>Total Deductions: {formatCurrency(deductions.totalDeductions || 0)}</Text>
-              <Text style={styles.net}>Net Salary: {formatCurrency(salary?.netPay || 0)}</Text>
-            </View>
-
-            <View style={styles.actions}>
-              <AppButton icon={Edit3} title={salary ? 'Edit Salary' : 'Assign Salary'} variant="muted" onPress={() => selectRow({employee, salary})} />
-              {salary ? <AppButton icon={Trash2} title="Delete" variant="danger" onPress={() => confirmDelete({employee, salary})} /> : null}
+              <AppButton title="Back" variant="muted" onPress={() => { setSelectedMonthlyEmployee(null); setSelectedMonthDetail(null); }} />
             </View>
           </Card>
-        );
-      })}
 
-      {!loading && !visibleRows.length ? <Text style={styles.empty}>No employees found.</Text> : null}
+          <Card>
+            <Text style={styles.title}>Month List</Text>
+            {monthOptions.map(option => (
+              <Pressable
+                key={`${option.month}-${option.year}`}
+                onPress={() => openMonthDetail(option)}
+                style={[
+                  styles.monthRow,
+                  selectedMonthDetail?.selectedMonthKey === monthKey(option) ? styles.selectedMonthRow : null,
+                ]}>
+                <Text style={[styles.name, selectedMonthDetail?.selectedMonthKey === monthKey(option) ? styles.selectedMonthText : null]}>
+                  {option.label}
+                </Text>
+                <Text style={selectedMonthDetail?.selectedMonthKey === monthKey(option) ? styles.selectedMonthMeta : styles.meta}>
+                  {option.month === today.month && option.year === today.year ? 'Current month' : 'Past month'}
+                </Text>
+              </Pressable>
+            ))}
+            {!monthOptions.length ? <Text style={styles.empty}>No month available from joining date.</Text> : null}
+          </Card>
+
+          {selectedMonthDetail ? (
+            <Card>
+              <Text style={styles.title}>{selectedMonthDetail.monthLabel || `${selectedMonthDetail.month}/${selectedMonthDetail.year}`} Salary Details</Text>
+              <Text style={styles.net}>Total Pay: {formatCurrency(selectedMonthDetail.totalPay || 0)}</Text>
+              <Text style={styles.meta}>Per day salary: {formatCurrency(selectedMonthDetail.perDaySalary || 0)}</Text>
+              <Text style={styles.meta}>Salary till date: {formatCurrency(selectedMonthDetail.salaryTillDate || 0)}</Text>
+              <Text style={styles.meta}>Payable days: {selectedMonthDetail.payableDays} / Present: {selectedMonthDetail.presentDays} / Leave: {selectedMonthDetail.leaveDays}</Text>
+              <Text style={styles.meta}>Weekly off paid: {selectedMonthDetail.weeklyOffPaidDays ?? selectedMonthDetail.sundayPaidDays ?? 0} / Holiday paid: {selectedMonthDetail.holidayPaidDays || 0} / Absent: {selectedMonthDetail.absentDays}</Text>
+              <Text style={styles.meta}>Cycle: {selectedMonthDetail.cycle?.startDate} to {selectedMonthDetail.cycle?.endDate} / Basis: {selectedMonthDetail.cycle?.salaryBasis || 'Full Month'} / Paid days: {selectedMonthDetail.cycle?.openDaysInMonth}</Text>
+              <View style={styles.summary}>
+                {(selectedMonthDetail.attendanceDetails || []).map(day => (
+                  <Text key={day.date} style={styles.summaryText}>
+                    {day.date} {day.day}: {day.status} / {day.timeStatus} / {day.payableDays} day / {day.reason}
+                  </Text>
+                ))}
+              </View>
+            </Card>
+          ) : null}
+        </>
+      )}
+      {!loading && !selectedMonthlyEmployee && !visibleMonthlyEmployees.length ? <Text style={styles.empty}>No employees found.</Text> : null}
     </Screen>
   );
 };
@@ -275,7 +276,10 @@ const styles = StyleSheet.create({
   name: {color: colors.text, fontSize: 18, fontWeight: '900'},
   meta: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
   count: {color: colors.textMuted, fontWeight: '800', marginTop: spacing.sm},
-  details: {gap: spacing.xs, marginTop: spacing.md},
+  monthRow: {borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: spacing.md},
+  selectedMonthRow: {backgroundColor: colors.primary, borderRadius: 8, borderBottomWidth: 0, marginVertical: spacing.xs, paddingHorizontal: spacing.md},
+  selectedMonthText: {color: colors.surface},
+  selectedMonthMeta: {color: colors.surface, fontWeight: '800', marginTop: spacing.xs},
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   badge: {borderRadius: 8, fontSize: 12, fontWeight: '900', overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},

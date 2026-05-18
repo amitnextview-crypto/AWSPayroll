@@ -22,8 +22,38 @@ const emptyPolicy = {
   category: 'General',
   description: '',
   status: 'active',
-  rules: [{label: '', value: ''}],
+  rules: [{label: '', value: '', note: ''}],
 };
+
+const masterRuleTemplate = {
+  title: 'Master Salary Rule',
+  category: 'Master Salary Rule',
+  description:
+    'Controls monthly employee and leader salary from attendance, approved leave, weekly off, and paid holidays.',
+  status: 'active',
+  rules: [
+    {label: 'Salary Basis Days', value: 'Full Month', note: 'Use Full Month or Fixed Days'},
+    {label: 'Fixed Paid Days', value: '26', note: 'Used when salary basis is Fixed Days'},
+    {label: 'Salary Cycle Start Day', value: '1', note: 'Monthly cycle start date'},
+    {label: 'Salary Cycle End Day', value: '31', note: 'Use 31 for month end'},
+    {label: 'Weekly Off Days', value: 'Sunday', note: 'Comma separated days'},
+    {label: 'Approved Leave Paid', value: 'Yes', note: 'Approved leave salary paid'},
+    {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
+    {label: 'Paid Holiday Names', value: 'Republic Day, Independence Day, Gandhi Jayanti, Diwali, Holi, Makar Sankranti', note: 'Reference names'},
+    {label: 'Minimum Full Day Hours', value: '7', note: 'Below this becomes half day'},
+    {label: 'Half Day Pay Value', value: '0.5', note: 'Half day salary multiplier'},
+    {label: 'Absent Pay Value', value: '0', note: 'Absent salary multiplier'},
+    {label: 'Expense Reimbursement Paid', value: 'Yes', note: 'Approved expenses add in total pay'},
+  ],
+};
+
+const quickRules = [
+  {label: 'Weekly Off Days', value: 'Sunday', note: 'Sunday or Saturday, Sunday'},
+  {label: 'Paid Holiday Dates', value: '2026-01-26, 2026-08-15, 2026-10-02', note: 'YYYY-MM-DD comma separated'},
+  {label: 'Approved Leave Paid', value: 'Yes', note: 'Yes or No'},
+  {label: 'Salary Basis Days', value: 'Full Month', note: 'Full Month or Fixed Days'},
+  {label: 'Fixed Paid Days', value: '26', note: '26, 30, or company rule'},
+];
 
 const statusItems = [
   {label: 'Active', value: 'active'},
@@ -31,11 +61,17 @@ const statusItems = [
   {label: 'Archived', value: 'archived'},
 ];
 
+const tabItems = [
+  {label: 'Master Rule', value: 'master'},
+  {label: 'All Policies', value: 'policies'},
+];
+
 export const AdminPoliciesScreen = () => {
   const [items, setItems] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [activeTab, setActiveTab] = useState('master');
   const [editingId, setEditingId] = useState('');
   const [form, setForm] = useState(emptyPolicy);
   const [loading, setLoading] = useState(false);
@@ -45,6 +81,16 @@ export const AdminPoliciesScreen = () => {
     const unique = Array.from(new Set(items.map(item => item.category).filter(Boolean)));
     return [{label: 'All', value: ''}, ...unique.map(value => ({label: value, value}))];
   }, [items]);
+
+  const masterPolicy = useMemo(
+    () =>
+      items.find(
+        item =>
+          String(item.title || '').toLowerCase() === 'master salary rule' ||
+          String(item.category || '').toLowerCase() === 'master salary rule',
+      ),
+    [items],
+  );
 
   const visibleItems = useMemo(() => {
     const lower = search.toLowerCase();
@@ -78,6 +124,12 @@ export const AdminPoliciesScreen = () => {
     setForm(emptyPolicy);
   };
 
+  const startMasterRule = () => {
+    setActiveTab('master');
+    setEditingId(masterPolicy?._id || masterPolicy?.id || 'new');
+    setForm(masterPolicy || masterRuleTemplate);
+  };
+
   const startEdit = item => {
     setEditingId(item._id || item.id);
     setForm({
@@ -85,7 +137,9 @@ export const AdminPoliciesScreen = () => {
       category: item.category || 'General',
       description: item.description || '',
       status: item.status || 'active',
-      rules: item.rules?.length ? item.rules.map(rule => ({label: rule.label || '', value: rule.value || ''})) : [{label: '', value: ''}],
+      rules: item.rules?.length
+        ? item.rules.map(rule => ({label: rule.label || '', value: rule.value || '', note: rule.note || ''}))
+        : [{label: '', value: '', note: ''}],
     });
   };
 
@@ -98,7 +152,9 @@ export const AdminPoliciesScreen = () => {
     }));
   };
 
-  const addRule = () => setForm(current => ({...current, rules: [...current.rules, {label: '', value: ''}]}));
+  const addRule = () => setForm(current => ({...current, rules: [...current.rules, {label: '', value: '', note: ''}]}));
+
+  const addQuickRule = rule => setForm(current => ({...current, rules: [...current.rules, {...rule}]}));
 
   const removeRule = index => {
     setForm(current => ({
@@ -113,7 +169,7 @@ export const AdminPoliciesScreen = () => {
       title: form.title.trim(),
       category: form.category.trim() || 'General',
       rules: form.rules
-        .map(rule => ({label: rule.label.trim(), value: rule.value.trim()}))
+        .map(rule => ({label: rule.label.trim(), value: rule.value.trim(), note: String(rule.note || '').trim()}))
         .filter(rule => rule.label && rule.value),
     };
     if (!payload.title) {
@@ -164,7 +220,9 @@ export const AdminPoliciesScreen = () => {
 
   const renderForm = () => (
     <Card>
-      <Text style={styles.title}>{editingId === 'new' ? 'Add New Policy' : 'Edit Policy'}</Text>
+      <Text style={styles.title}>
+        {form.category === 'Master Salary Rule' ? 'Master Salary Rule' : editingId === 'new' ? 'Add New Policy' : 'Edit Policy'}
+      </Text>
       <AppTextInput label="Policy Title" value={form.title} onChangeText={value => setForm(current => ({...current, title: value}))} />
       <View style={styles.twoCol}>
         <AppTextInput label="Category" value={form.category} onChangeText={value => setForm(current => ({...current, category: value}))} style={styles.flex} />
@@ -172,10 +230,16 @@ export const AdminPoliciesScreen = () => {
       </View>
       <FilterChips items={statusItems} value={form.status} onChange={value => setForm(current => ({...current, status: value}))} />
       <Text style={styles.section}>Rules</Text>
+      <View style={styles.quickRules}>
+        {quickRules.map(rule => (
+          <AppButton key={rule.label} icon={Plus} title={rule.label} variant="muted" onPress={() => addQuickRule(rule)} />
+        ))}
+      </View>
       {form.rules.map((rule, index) => (
         <View key={String(index)} style={styles.ruleEditor}>
           <AppTextInput label="Rule Name" value={rule.label} onChangeText={value => setRule(index, 'label', value)} style={styles.flex} />
           <AppTextInput label="Rule Value" value={rule.value} onChangeText={value => setRule(index, 'value', value)} style={styles.flex} />
+          <AppTextInput label="Note" value={rule.note || ''} onChangeText={value => setRule(index, 'note', value)} style={styles.flex} />
           <AppButton icon={Trash2} title="Remove" variant="muted" disabled={form.rules.length === 1} onPress={() => removeRule(index)} />
         </View>
       ))}
@@ -194,17 +258,45 @@ export const AdminPoliciesScreen = () => {
         <View style={styles.header}>
           <View style={styles.flex}>
             <Text style={styles.heading}>Payroll Policies</Text>
-            <Text style={styles.meta}>Default corporate policies and custom admin policies</Text>
+            <Text style={styles.meta}>Master salary rule, corporate policies, and custom admin rules</Text>
           </View>
           <AppButton icon={Plus} title="Add New Policy" onPress={startAdd} />
         </View>
+        <FilterChips items={tabItems} value={activeTab} onChange={setActiveTab} />
         <AppTextInput label="Search policies or rules" value={search} onChangeText={setSearch} />
-        <FilterChips items={categories} value={category} onChange={setCategory} />
+        {activeTab === 'policies' ? <FilterChips items={categories} value={category} onChange={setCategory} /> : null}
       </Card>
 
       {editingId ? renderForm() : null}
 
-      {visibleItems.map(item => {
+      {activeTab === 'master' && !editingId ? (
+        <Card>
+          <View style={styles.header}>
+            <View style={styles.flex}>
+              <Text style={styles.title}>Master Salary Rule</Text>
+              <Text style={styles.meta}>
+                Monthly salary is calculated from this rule plus attendance, approved leave, weekly off, and paid holidays.
+              </Text>
+            </View>
+            <AppButton icon={Edit3} title={masterPolicy ? 'Edit' : 'Create'} onPress={startMasterRule} />
+          </View>
+          {masterPolicy ? (
+            <View style={styles.ruleList}>
+              {(masterPolicy.rules || []).map((rule, index) => (
+                <View key={`${rule.label}-${index}`} style={styles.ruleRow}>
+                  <Text style={styles.ruleLabel}>{rule.label}</Text>
+                  <Text style={styles.ruleValue}>{rule.value}</Text>
+                  {rule.note ? <Text style={styles.ruleNote}>{rule.note}</Text> : null}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.meta}>Create the master rule to control 26 day, 30 day, full month, leave, holiday, and weekly off salary rules.</Text>
+          )}
+        </Card>
+      ) : null}
+
+      {activeTab === 'policies' ? visibleItems.map(item => {
         const id = item._id || item.id;
         const isExpanded = expanded[id] ?? false;
         const rules = isExpanded ? item.rules || [] : (item.rules || []).slice(0, 4);
@@ -225,6 +317,7 @@ export const AdminPoliciesScreen = () => {
                 <View key={`${rule.label}-${index}`} style={styles.ruleRow}>
                   <Text style={styles.ruleLabel}>{rule.label}</Text>
                   <Text style={styles.ruleValue}>{rule.value}</Text>
+                  {rule.note ? <Text style={styles.ruleNote}>{rule.note}</Text> : null}
                 </View>
               ))}
             </View>
@@ -237,8 +330,8 @@ export const AdminPoliciesScreen = () => {
             </View>
           </Card>
         );
-      })}
-      {!loading && !visibleItems.length ? <Text style={styles.empty}>No payroll policies found.</Text> : null}
+      }) : null}
+      {!loading && activeTab === 'policies' && !visibleItems.length ? <Text style={styles.empty}>No payroll policies found.</Text> : null}
     </Screen>
   );
 };
@@ -251,11 +344,13 @@ const styles = StyleSheet.create({
   header: {alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between'},
   flex: {flex: 1},
   twoCol: {flexDirection: 'row', gap: spacing.md},
+  quickRules: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginVertical: spacing.sm},
   ruleEditor: {gap: spacing.sm},
   ruleList: {gap: spacing.sm, marginTop: spacing.md},
   ruleRow: {backgroundColor: colors.surfaceMuted, borderRadius: 8, padding: spacing.md},
   ruleLabel: {color: colors.text, fontWeight: '900'},
   ruleValue: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
+  ruleNote: {color: colors.textMuted, fontSize: 12, fontWeight: '800', marginTop: spacing.xs},
   more: {color: colors.primary, fontWeight: '900', marginTop: spacing.sm},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
   empty: {color: colors.textMuted, textAlign: 'center'},

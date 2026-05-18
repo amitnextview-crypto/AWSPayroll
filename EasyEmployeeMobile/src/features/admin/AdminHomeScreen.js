@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {
   Bell,
@@ -111,37 +111,41 @@ export const AdminHomeScreen = ({navigation}) => {
 
       <Card>
         <Text style={styles.cardTitle}>Notifications</Text>
-        {(dashboard?.notifications || []).map(item => (
-          <Text key={item} style={styles.meta}>- {item}</Text>
-        ))}
-        {(dashboard?.pendingLeaveList || []).map(item => (
-          <Pressable
-            key={`leave-${item.id}`}
-            onPress={() => navigation.navigate('AdminLeaves', {employeeID: item.employeeID, leaveID: item.id})}
-            style={styles.notificationItem}>
-            <Text style={styles.notificationTitle}>Pending leave: {item.name || '-'}</Text>
-            <Text style={styles.meta}>ID: {item.employeeID || '-'} / {item.type || '-'} / {item.startDate || '-'} to {item.endDate || '-'}</Text>
-          </Pressable>
-        ))}
-        {(dashboard?.absentList || []).map(item => (
-          <Pressable
-            key={`absent-${item.id}`}
-            onPress={() => navigation.navigate('AdminAttendance', {employeeID: item.employeeID, date: new Date().getDate()})}
-            style={styles.notificationItem}>
-            <Text style={styles.notificationTitle}>Absent today: {item.name || '-'}</Text>
-            <Text style={styles.meta}>ID: {item.username || item.employeeCode || item.employeeID || '-'}</Text>
-          </Pressable>
-        ))}
+        <ScrollView nestedScrollEnabled style={styles.limitedList}>
+          {(dashboard?.notifications || []).map(item => (
+            <Text key={item} style={styles.meta}>- {item}</Text>
+          ))}
+          {(dashboard?.pendingLeaveList || []).map(item => (
+            <Pressable
+              key={`leave-${item.id}`}
+              onPress={() => navigation.navigate('AdminLeaves', {employeeID: item.employeeID, leaveID: item.id})}
+              style={styles.notificationItem}>
+              <Text style={styles.notificationTitle}>Pending leave: {item.name || '-'}</Text>
+              <Text style={styles.meta}>ID: {item.employeeID || '-'} / {item.type || '-'} / {item.startDate || '-'} to {item.endDate || '-'}</Text>
+            </Pressable>
+          ))}
+          {(dashboard?.absentList || []).map(item => (
+            <Pressable
+              key={`absent-${item.id}`}
+              onPress={() => navigation.navigate('AdminAttendance', {employeeID: item.employeeID, date: new Date().getDate()})}
+              style={styles.notificationItem}>
+              <Text style={styles.notificationTitle}>Absent today: {item.name || '-'}</Text>
+              <Text style={styles.meta}>ID: {item.username || item.employeeCode || item.employeeID || '-'}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </Card>
 
       <Card>
         <Text style={styles.cardTitle}>Recent Activities</Text>
-        {(dashboard?.recentActivities || []).map((item, index) => (
-          <View key={`${item.title}-${index}`} style={styles.activity}>
-            <Text style={styles.activityTitle}>{item.title}</Text>
-            <Text style={styles.meta}>{item.type} - {item.status || '-'}</Text>
-          </View>
-        ))}
+        <ScrollView nestedScrollEnabled style={styles.limitedList}>
+          {(dashboard?.recentActivities || []).map((item, index) => (
+            <View key={`${item.title}-${index}`} style={styles.activity}>
+              <Text style={styles.activityTitle}>{item.title}</Text>
+              <Text style={styles.meta}>{item.type} - {item.status || '-'}</Text>
+            </View>
+          ))}
+        </ScrollView>
         {!dashboard?.recentActivities?.length ? <Text style={styles.meta}>No recent activity yet.</Text> : null}
       </Card>
     </Screen>
@@ -237,5 +241,8 @@ const styles = StyleSheet.create({
   notificationTitle: {
     color: colors.text,
     fontWeight: '900',
+  },
+  limitedList: {
+    maxHeight: 330,
   },
 });

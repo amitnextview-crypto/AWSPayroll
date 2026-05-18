@@ -4,6 +4,7 @@ import {FileText} from 'lucide-react-native';
 import {
   assignAdminSalary,
   getAdminAllUsers,
+  getAdminSalaries,
   getSalaryTaxRules,
   updateAdminSalary,
 } from '../../api/employeeApi';
@@ -76,16 +77,21 @@ const salaryToForm = salary => {
 };
 
 const idOf = item => String(item?.id || item?._id || item || '');
+const salaryEmployeeId = salary => {
+  const employee = salary?.employeeID || salary?.employee || salary?.user;
+  return typeof employee === 'object' ? idOf(employee) : String(employee || '');
+};
 
 export const AdminAssignSalaryScreen = ({navigation, route}) => {
   const [employees, setEmployees] = useState([]);
+  const [salaries, setSalaries] = useState([]);
   const [employeeID, setEmployeeID] = useState('');
   const [form, setForm] = useState(emptySalary);
   const [search, setSearch] = useState('');
   const [taxRules, setTaxRules] = useState(fallbackTaxRules);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
-  const editingSalary = route?.params?.salary || null;
+  const routeSalary = route?.params?.salary || null;
 
   const loadTaxRules = async () => {
     const response = await getSalaryTaxRules();
@@ -93,9 +99,10 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
   };
 
   useEffect(() => {
-    Promise.all([getAdminAllUsers(), loadTaxRules()])
-      .then(([employeeResponse, taxResponse]) => {
+    Promise.all([getAdminAllUsers(), getAdminSalaries({}), loadTaxRules()])
+      .then(([employeeResponse, salaryResponse]) => {
         setEmployees((employeeResponse?.data || []).filter(isWorkforce));
+        setSalaries(salaryResponse?.data || salaryResponse?.salaries || []);
       })
       .catch(err => setToast(err.message || 'Employees could not be loaded.'));
   }, []);
@@ -109,14 +116,14 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
 
   useEffect(() => {
     const routeEmployee = route?.params?.employee;
-    if (!routeEmployee && !editingSalary) return;
-    const employeeId = idOf(routeEmployee || editingSalary?.employeeID);
+    if (!routeEmployee && !routeSalary) return;
+    const employeeId = idOf(routeEmployee || routeSalary?.employeeID);
     if (employeeId) setEmployeeID(employeeId);
     if (routeEmployee?.name || routeEmployee?.email || routeEmployee?.username) {
       setSearch(`${routeEmployee.name || routeEmployee.username || ''}`);
     }
-    if (editingSalary) setForm(salaryToForm(editingSalary));
-  }, [editingSalary, route?.params?.employee]);
+    if (routeSalary) setForm(salaryToForm(routeSalary));
+  }, [routeSalary, route?.params?.employee]);
 
   const calculateAnnualTax = (annualGross, rules) => {
     const taxableIncome = Math.max(annualGross - STANDARD_DEDUCTION, 0);
@@ -161,16 +168,28 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
     return {gross, deductions, net: Math.max(gross - deductions, 0), overtimePay, pfEmployee, pfEmployer, esiEmployee, esiEmployer, tdsMonthly, annualGross, tax};
   }, [form, taxRules]);
 
+  const salaryByEmployee = useMemo(
+    () => new Map(salaries.map(salary => [salaryEmployeeId(salary), salary])),
+    [salaries],
+  );
+  const selectedSalary = routeSalary || salaryByEmployee.get(employeeID) || null;
   const selectedEmployee = employees.find(employee => (employee.id || employee._id) === employeeID);
+
+  useEffect(() => {
+    if (!employeeID || routeSalary) return;
+    const salary = salaryByEmployee.get(employeeID);
+    setForm(salary ? salaryToForm(salary) : emptySalary);
+  }, [employeeID, routeSalary, salaryByEmployee]);
+
   const filteredEmployees = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return employees;
-    return employees.filter(employee =>
+    const source = term ? employees : employees.filter(employee => !salaryByEmployee.has(idOf(employee)));
+    return source.filter(employee =>
       `${employee.name || ''} ${employee.email || ''} ${employee.employeeCode || ''} ${employee.username || ''} ${employee._id || employee.id || ''}`
         .toLowerCase()
         .includes(term),
     );
-  }, [employees, search]);
+  }, [employees, salaryByEmployee, search]);
 
   const set = (key, value) => setForm(current => ({...current, [key]: value.replace(/[^0-9.]/g, '')}));
 
@@ -217,10 +236,12 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
         },
         netPay: totals.net,
       };
-      const response = editingSalary ? await updateAdminSalary(payload) : await assignAdminSalary(payload);
-      Alert.alert('Salary', response?.message || (editingSalary ? 'Salary updated.' : 'Salary assigned.'));
+      const response = selectedSalary ? await updateAdminSalary(payload) : await assignAdminSalary(payload);
+      Alert.alert('Salary', response?.message || (selectedSalary ? 'Salary updated.' : 'Salary assigned.'));
       setForm(emptySalary);
       navigation.setParams?.({employee: undefined, salary: undefined});
+      const salaryResponse = await getAdminSalaries({});
+      setSalaries(salaryResponse?.data || salaryResponse?.salaries || []);
     } catch (err) {
       setToast(err.message || 'Salary could not be saved.');
     } finally {
@@ -232,7 +253,7 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
     <Screen>
       <ToastBanner message={toast} onHide={() => setToast('')} />
       <Card>
-        <Text style={styles.title}>{editingSalary ? 'Edit Salary Structure' : 'Assign Salary Structure'}</Text>
+        <Text style={styles.title}>{selectedSalary ? 'Edit Salary Structure' : 'Assign Salary Structure'}</Text>
         <View style={styles.actions}>
           <AppButton icon={FileText} title="TDS Rules" variant="muted" onPress={() => navigation.navigate('AdminTdsRules')} />
         </View>
@@ -247,8 +268,12 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
           }))}
         />
         {selectedEmployee ? (
-          <Text style={styles.employeeId}>Selected ID: {selectedEmployee._id || selectedEmployee.id} / {selectedEmployee.email}</Text>
+          <Text style={styles.employeeId}>
+            Selected ID: {selectedEmployee._id || selectedEmployee.id} / {selectedEmployee.email}
+            {selectedSalary ? ' / Salary already assigned, update mode enabled' : ''}
+          </Text>
         ) : null}
+        {!search.trim() ? <Text style={styles.employeeId}>Showing only employees/leaders without assigned salary. Search to find already assigned employees.</Text> : null}
       </Card>
 
       <Card>
@@ -307,7 +332,7 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
           <Text style={styles.net}>Net Salary: {formatCurrency(totals.net)}</Text>
           <Text style={styles.summaryText}>Yearly Net: {formatCurrency(totals.net * 12)}</Text>
         </View>
-        <AppButton loading={loading} onPress={submit} title={editingSalary ? 'Update Salary' : 'Assign Salary'} />
+        <AppButton loading={loading} onPress={submit} title={selectedSalary ? 'Update Salary' : 'Assign Salary'} />
       </Card>
     </Screen>
   );
