@@ -74,8 +74,8 @@ export const AdminExpensesScreen = () => {
             <Text style={styles.meta}>Description: {item.description || '-'}</Text>
             <Text style={styles.status}>Status: {item.adminResponse || 'Pending'}</Text>
             <View style={styles.actions}>
-              <AppButton icon={Check} onPress={() => decide(item, 'Approved')} title="Approve" variant="success" />
-              <AppButton icon={X} onPress={() => decide(item, 'Rejected')} title="Reject" variant="danger" />
+              <AppButton icon={Check} disabled={item.adminResponse === 'Approved'} onPress={() => decide(item, 'Approved')} title={item.adminResponse === 'Approved' ? 'Approved' : 'Approve'} variant="success" />
+              <AppButton icon={X} disabled={item.adminResponse === 'Rejected'} onPress={() => decide(item, 'Rejected')} title={item.adminResponse === 'Rejected' ? 'Rejected' : 'Reject'} variant="danger" />
             </View>
           </Card>
         );

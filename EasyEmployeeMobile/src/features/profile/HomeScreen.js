@@ -2,13 +2,14 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {BriefcaseBusiness, CalendarCheck, ClipboardList, IndianRupee, MapPin, ReceiptText, Users} from 'lucide-react-native';
-import {getAttendance, getEmployeeExpenses, getLeaveApplications} from '../../api/employeeApi';
+import {getAttendance, getEmployeeExpenses, getLeaveApplications, getMyMonthlySalary} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {todayParts} from '../../utils/date';
+import {formatCurrency} from '../../utils/money';
 
 const Field = ({label, value}) => (
   <View style={styles.field}>
@@ -23,6 +24,7 @@ export const HomeScreen = ({navigation}) => {
     attendanceStatus: 'Loading',
     expenseCount: 0,
     leaveCount: 0,
+    salaryTillDate: 0,
   });
 
   const today = useMemo(() => todayParts(), []);
@@ -32,11 +34,16 @@ export const HomeScreen = ({navigation}) => {
       return;
     }
     try {
-      const [attendanceResponse, expenseResponse, leaveResponse] = await Promise.all([
+      const [attendanceResult, expenseResult, leaveResult, salaryResult] = await Promise.allSettled([
         getAttendance({employeeID: user.id, year: today.year, month: today.month}),
         getEmployeeExpenses(),
         getLeaveApplications({applicantID: user.id}),
+        getMyMonthlySalary({month: today.month, year: today.year}),
       ]);
+      const attendanceResponse = attendanceResult.status === 'fulfilled' ? attendanceResult.value : {};
+      const expenseResponse = expenseResult.status === 'fulfilled' ? expenseResult.value : {};
+      const leaveResponse = leaveResult.status === 'fulfilled' ? leaveResult.value : {};
+      const salaryResponse = salaryResult.status === 'fulfilled' ? salaryResult.value : {};
       const attendance = attendanceResponse?.data || [];
       const todayRecord = attendance.find(
         item => item.date === today.date && item.month === today.month && item.year === today.year,
@@ -50,6 +57,7 @@ export const HomeScreen = ({navigation}) => {
         attendanceStatus,
         expenseCount: (expenseResponse?.data || expenseResponse?.expenses || []).length,
         leaveCount: (leaveResponse?.data || []).length,
+        salaryTillDate: salaryResponse?.data?.totalPay || 0,
       });
     } catch (err) {
       setSummary(current => ({...current, attendanceStatus: 'Unavailable'}));
@@ -71,7 +79,7 @@ export const HomeScreen = ({navigation}) => {
       <View style={styles.grid}>
         <MetricCard icon={CalendarCheck} label="Today Attendance" value={summary.attendanceStatus} tone="success" />
         <MetricCard icon={ClipboardList} label="Leave Count" value={String(summary.leaveCount)} tone="primary" />
-        <MetricCard icon={IndianRupee} label="Salary" value="View" tone="warning" />
+        <MetricCard icon={IndianRupee} label="Salary Till Date" value={formatCurrency(summary.salaryTillDate || 0)} tone="warning" />
         <MetricCard icon={ReceiptText} label="Expense Count" value={String(summary.expenseCount)} tone="info" />
       </View>
 

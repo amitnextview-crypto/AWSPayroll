@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Alert, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {useDispatch, useSelector} from 'react-redux';
 import {LogIn, LogOut, MapPin} from 'lucide-react-native';
 import {AppButton} from '../../components/AppButton';
@@ -9,6 +9,7 @@ import {EmptyState} from '../../components/EmptyState';
 import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
+import {getEmployeePayrollPolicies} from '../../api/employeeApi';
 import {verifyOfficeLocation} from '../../services/locationService';
 import {
   checkIn,
@@ -27,7 +28,7 @@ const AttendanceItem = ({item}) => (
         <Text style={styles.itemTitle}>{formatDisplayDate(item)}</Text>
         <Text style={styles.itemSubtitle}>{item.day}</Text>
       </View>
-      <StatusPill value={item.present ? 'Present' : 'Absent'} />
+      <StatusPill value={item.status || (item.present ? 'Present' : 'Absent')} />
     </View>
     <View style={styles.grid}>
       <Text style={styles.meta}>In: {item.attendanceIn || '-'}</Text>
@@ -40,6 +41,26 @@ const AttendanceItem = ({item}) => (
   </Card>
 );
 
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const splitRuleList = value =>
+  String(value || '')
+    .split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+const masterRuleFromPolicies = policies =>
+  (policies || []).find(
+    item =>
+      String(item.title || '').toLowerCase() === 'master salary rule' ||
+      String(item.category || '').toLowerCase() === 'master salary rule',
+  );
+const weeklyOffDaysFromPolicies = policies => {
+  const master = masterRuleFromPolicies(policies);
+  const rule = (master?.rules || []).find(item =>
+    ['weekly off days', 'weekly off'].includes(String(item.label || '').trim().toLowerCase()),
+  );
+  return splitRuleList(rule?.value || 'Sunday');
+};
+
 export const AttendanceScreen = () => {
   const dispatch = useDispatch();
   const {user} = useSelector(state => state.auth);
@@ -47,6 +68,7 @@ export const AttendanceScreen = () => {
     state => state.attendance,
   );
   const [locationState, setLocationState] = useState(null);
+  const [weeklyOffDays, setWeeklyOffDays] = useState(['sunday']);
   const currentParts = useMemo(() => todayParts(), []);
   const [filters, setFilters] = useState({
     mode: 'month',
@@ -75,7 +97,12 @@ export const AttendanceScreen = () => {
     return [...filtered].sort((a, b) => Number(b.date) - Number(a.date));
   }, [filters.day, filters.mode, records]);
 
-  const monthlyCount = useMemo(() => records.filter(item => item.present).length, [records]);
+  const monthlyCount = useMemo(
+    () => records.filter(item => item.present && String(item.status || '').toLowerCase() !== 'weekly off').length,
+    [records],
+  );
+  const todayDayName = dayNames[new Date(currentParts.year, currentParts.month - 1, currentParts.date).getDay()];
+  const isWeeklyOffToday = weeklyOffDays.includes(todayDayName.toLowerCase());
 
   const refresh = useCallback(() => {
     if (user?.id) {
@@ -90,6 +117,22 @@ export const AttendanceScreen = () => {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadPolicies = async () => {
+      try {
+        const response = await getEmployeePayrollPolicies();
+        if (mounted) setWeeklyOffDays(weeklyOffDaysFromPolicies(response?.data || []));
+      } catch (err) {
+        if (mounted) setWeeklyOffDays(['sunday']);
+      }
+    };
+    loadPolicies();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -125,10 +168,14 @@ export const AttendanceScreen = () => {
   const isCurrentMonthFilter =
     Number(filters.month) === currentParts.month &&
     Number(filters.year) === currentParts.year;
-  const canCheckIn = Boolean(locationState?.allowed) && isCurrentMonthFilter && !todayRecord?.attendanceIn;
-  const canCheckOut = isCurrentMonthFilter && Boolean(todayRecord?.attendanceIn) && !todayRecord?.attendanceOut;
+  const canCheckIn = Boolean(locationState?.allowed) && isCurrentMonthFilter && !isWeeklyOffToday && !todayRecord?.attendanceIn;
+  const canCheckOut = isCurrentMonthFilter && !isWeeklyOffToday && Boolean(todayRecord?.attendanceIn) && !todayRecord?.attendanceOut;
 
   const handleCheckIn = async () => {
+    if (isWeeklyOffToday) {
+      Alert.alert('Weekly off', `${todayDayName} is weekly off as per company rule.`);
+      return;
+    }
     const locationResult = await runLocationGate();
     if (!locationResult.allowed) {
       return;
@@ -146,6 +193,10 @@ export const AttendanceScreen = () => {
   };
 
   const handleCheckOut = async () => {
+    if (isWeeklyOffToday) {
+      Alert.alert('Weekly off', `${todayDayName} is weekly off as per company rule.`);
+      return;
+    }
     const locationResult = await runLocationGate();
     if (!locationResult.allowed) {
       return;
@@ -163,7 +214,7 @@ export const AttendanceScreen = () => {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}>
       <Card>
         <View style={styles.summary}>
           <Text style={styles.summaryLabel}>This month</Text>
@@ -171,6 +222,7 @@ export const AttendanceScreen = () => {
           <Text style={styles.summarySub}>
             Today: {todayRecord?.attendanceOut ? 'Completed' : todayRecord?.attendanceIn ? 'Checked in' : 'Not checked in'}
           </Text>
+          {isWeeklyOffToday ? <Text style={styles.summarySub}>{todayDayName} weekly off as per master salary rule</Text> : null}
         </View>
       </Card>
 
@@ -199,7 +251,7 @@ export const AttendanceScreen = () => {
             icon={LogIn}
             loading={actionLoading}
             onPress={handleCheckIn}
-            title={todayRecord?.attendanceIn ? 'Checked In' : 'Check In'}
+            title={isWeeklyOffToday ? 'Weekly Off' : todayRecord?.attendanceIn ? 'Checked In' : 'Check In'}
             variant="success"
           />
           <AppButton
@@ -207,7 +259,7 @@ export const AttendanceScreen = () => {
             icon={LogOut}
             loading={actionLoading}
             onPress={handleCheckOut}
-            title={todayRecord?.attendanceOut ? 'Checked Out' : 'Check Out'}
+            title={isWeeklyOffToday ? 'Weekly Off' : todayRecord?.attendanceOut ? 'Checked Out' : 'Check Out'}
             variant="danger"
           />
         </View>
@@ -256,19 +308,15 @@ export const AttendanceScreen = () => {
       {loading ? (
         <ActivityIndicator color={colors.primary} />
       ) : (
-        <FlatList
-          data={visibleRecords}
-          keyExtractor={item => item._id}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
-          renderItem={({item}) => <AttendanceItem item={item} />}
-          ListEmptyComponent={
+        <View style={styles.list}>
+          {visibleRecords.map(item => <AttendanceItem key={item._id || `${item.year}-${item.month}-${item.date}`} item={item} />)}
+          {!visibleRecords.length ? (
             <EmptyState
               title="No attendance yet"
               message="Your check-in history for this month will appear here."
             />
-          }
-          contentContainerStyle={styles.list}
-        />
+          ) : null}
+        </View>
       )}
     </Screen>
   );

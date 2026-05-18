@@ -6,6 +6,7 @@ import {
   getAdminAllUsers,
   getAdminAttendance,
   getAdminLeaves,
+  getPayrollPolicies,
   updateAdminAttendance,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
@@ -47,6 +48,22 @@ const statusForMissing = (leaves, year, month, date) => {
 };
 
 const emptyEdit = {status: 'Absent', attendanceIn: '', attendanceOut: '', late: 'No', timeStatus: ''};
+const splitRuleList = value =>
+  String(value || '')
+    .split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+const weeklyOffDaysFromPolicies = policies => {
+  const master = (policies || []).find(
+    item =>
+      String(item.title || '').toLowerCase() === 'master salary rule' ||
+      String(item.category || '').toLowerCase() === 'master salary rule',
+  );
+  const rule = (master?.rules || []).find(item =>
+    ['weekly off days', 'weekly off'].includes(String(item.label || '').trim().toLowerCase()),
+  );
+  return splitRuleList(rule?.value || 'Sunday');
+};
 const statusOptions = [
   {label: 'Present', value: 'Present'},
   {label: 'Half Day', value: 'Half Day'},
@@ -87,6 +104,7 @@ export const AdminAttendanceScreen = ({route}) => {
   const [leaves, setLeaves] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
   const [todayLeaves, setTodayLeaves] = useState([]);
+  const [weeklyOffDays, setWeeklyOffDays] = useState(['sunday']);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState(route?.params?.date ? String(route.params.date) : '');
   const [monthFilter, setMonthFilter] = useState(String(today.month));
@@ -114,6 +132,15 @@ export const AdminAttendanceScreen = ({route}) => {
       setError(err.message || 'Employees could not be loaded.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPolicies = async () => {
+    try {
+      const response = await getPayrollPolicies();
+      setWeeklyOffDays(weeklyOffDaysFromPolicies(response?.data || []));
+    } catch (err) {
+      setWeeklyOffDays(['sunday']);
     }
   };
 
@@ -151,6 +178,7 @@ export const AdminAttendanceScreen = ({route}) => {
   useEffect(() => {
     loadEmployees();
     loadTodayAbsences();
+    loadPolicies();
   }, [route?.params?.employeeID]);
 
   useEffect(() => {
@@ -179,7 +207,9 @@ export const AdminAttendanceScreen = ({route}) => {
     for (let date = 1; date <= count; date += 1) {
       const record = recordByDate.get(date);
       const day = dayNames[new Date(year, month - 1, date).getDay()];
-      const status = record?.status || (record ? (record.present ? 'Present' : 'Absent') : statusForMissing(leaves, year, month, date));
+      const isWeeklyOff = weeklyOffDays.includes(day.toLowerCase());
+      const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, year, month, date);
+      const status = record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
       rows.push({
         key: `${year}-${month}-${date}`,
         id: record?._id || record?.id || '',
@@ -195,17 +225,19 @@ export const AdminAttendanceScreen = ({route}) => {
         attendanceOut: record?.attendanceOut || '-',
         late: record?.late || '-',
         totalHours: record?.totalHours || '-',
-        timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : '-'),
-        reason: record?.reason || statusForMissing(leaves, year, month, date),
+        timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : status === 'Weekly Off' ? 'Weekly Off' : '-'),
+        reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, year, month, date)),
       });
     }
     const selectedDate = Number(dateFilter || 0);
     const visibleRows = selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
     return visibleRows.sort((a, b) => b.date - a.date);
-  }, [dateFilter, leaves, month, records, selectedEmployee, today, year]);
+  }, [dateFilter, leaves, month, records, selectedEmployee, today, weeklyOffDays, year]);
 
   const todayAbsentRows = useMemo(() => {
     const todayIso = apiDate(today.year, today.month, today.date);
+    const todayDay = dayNames[new Date(today.year, today.month - 1, today.date).getDay()];
+    if (weeklyOffDays.includes(todayDay.toLowerCase())) return [];
     const approvedLeaveIds = new Set(
       todayLeaves
         .filter(item => item.adminResponse === 'Approved' && item.startDate <= todayIso && item.endDate >= todayIso)
@@ -241,9 +273,13 @@ export const AdminAttendanceScreen = ({route}) => {
           reason: record?.reason || 'Check-in not recorded',
         };
       });
-  }, [employees, today, todayLeaves, todayRecords]);
+  }, [employees, today, todayLeaves, todayRecords, weeklyOffDays]);
 
   const startEdit = row => {
+    if (row.status === 'Weekly Off') {
+      setError('Weekly off day cannot be edited.');
+      return;
+    }
     setEditingKey(row.key);
     setEditForm({
       status: ['Present', 'Half Day', 'Leave', 'Absent'].includes(row.status) ? row.status : 'Absent',
@@ -257,6 +293,10 @@ export const AdminAttendanceScreen = ({route}) => {
   const setEdit = (key, value) => setEditForm(current => ({...current, [key]: value}));
 
   const saveAttendance = async row => {
+    if (row.status === 'Weekly Off') {
+      setError('Weekly off day cannot be edited.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -287,6 +327,10 @@ export const AdminAttendanceScreen = ({route}) => {
   };
 
   const removeAttendance = async row => {
+    if (row.status === 'Weekly Off') {
+      setError('Weekly off day cannot be deleted.');
+      return;
+    }
     if (!row.id) {
       setError('No saved attendance record found for this day.');
       return;
@@ -433,8 +477,8 @@ export const AdminAttendanceScreen = ({route}) => {
             </View>
           ) : (
             <View style={styles.actions}>
-              <AppButton icon={Edit3} title="Edit" variant="muted" onPress={() => startEdit(row)} />
-              {row.id ? <AppButton icon={Trash2} title="Delete" variant="danger" onPress={() => removeAttendance(row)} /> : null}
+              <AppButton icon={Edit3} title={row.status === 'Weekly Off' ? 'Weekly Off' : 'Edit'} variant="muted" disabled={row.status === 'Weekly Off'} onPress={() => startEdit(row)} />
+              {row.id ? <AppButton icon={Trash2} title="Delete" variant="danger" disabled={row.status === 'Weekly Off'} onPress={() => removeAttendance(row)} /> : null}
             </View>
           )}
         </Card>

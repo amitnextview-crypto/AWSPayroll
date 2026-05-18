@@ -110,8 +110,8 @@ export const AdminLeavesScreen = ({route}) => {
               </View>
             ) : null}
             <View style={styles.actions}>
-              <AppButton icon={Check} onPress={() => approve(item)} title="Approve" variant="success" />
-              <AppButton icon={X} onPress={() => setRejecting(id)} title="Reject" variant="danger" />
+              <AppButton icon={Check} disabled={item.adminResponse === 'Approved'} onPress={() => approve(item)} title={item.adminResponse === 'Approved' ? 'Approved' : 'Approve'} variant="success" />
+              <AppButton icon={X} disabled={item.adminResponse === 'Rejected'} onPress={() => setRejecting(id)} title={item.adminResponse === 'Rejected' ? 'Rejected' : 'Reject'} variant="danger" />
             </View>
           </Card>
         );

@@ -39,6 +39,7 @@ router.post(
     asyncMiddleware(userController.viewLeaveApplications)
 );
 router.post("/view-salary", asyncMiddleware(userController.viewSalary));
+router.get("/monthly-salary", asyncMiddleware(userController.calculateMyMonthlySalary));
 router.post(
     "/checkin-employee-attendance",
     asyncMiddleware(userController.checkInEmployeeAttendance)

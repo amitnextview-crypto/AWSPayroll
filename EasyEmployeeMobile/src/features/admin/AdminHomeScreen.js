@@ -87,7 +87,7 @@ export const AdminHomeScreen = ({navigation}) => {
           <Text style={styles.value}>{formatCurrency(payroll.deductions || 0)}</Text>
         </View>
         <View style={styles.payrollRow}>
-          <Text style={styles.meta}>Payable till today</Text>
+          <Text style={styles.meta}>Payable till date</Text>
           <Text style={styles.value}>{formatCurrency(payroll.payableTillDate || 0)}</Text>
         </View>
         <Text style={styles.meta}>

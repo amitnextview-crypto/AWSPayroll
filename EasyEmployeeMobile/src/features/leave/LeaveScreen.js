@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Alert, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {CalendarPlus, ChevronLeft, ChevronRight} from 'lucide-react-native';
@@ -7,6 +7,7 @@ import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
@@ -114,10 +115,18 @@ const LeaveItem = ({item}) => (
   </Card>
 );
 
-export const LeaveScreen = () => {
+const viewItems = [
+  {label: 'Apply', value: 'apply'},
+  {label: 'Applications', value: 'applications'},
+];
+
+export const LeaveScreen = ({route}) => {
   const {user} = useSelector(state => state.auth);
+  const initialMode = route?.params?.mode || 'apply';
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState(initialForm);
   const [items, setItems] = useState([]);
+  const [filters, setFilters] = useState({date: '', type: '', search: ''});
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [showTypes, setShowTypes] = useState(false);
   const [dateField, setDateField] = useState('');
@@ -141,6 +150,10 @@ export const LeaveScreen = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (route?.params?.mode) setMode(route.params.mode);
+  }, [route?.params?.mode]);
 
   useEffect(() => {
     const loadTypes = async () => {
@@ -183,9 +196,23 @@ export const LeaveScreen = () => {
     }
   };
 
+  const visibleItems = useMemo(() => {
+    const date = filters.date.trim();
+    const type = filters.type.trim().toLowerCase();
+    const search = filters.search.trim().toLowerCase();
+    return items.filter(item => {
+      const dateMatch = !date || item.startDate === date || item.endDate === date || item.appliedDate === date;
+      const typeMatch = !type || String(item.type || '').toLowerCase().includes(type);
+      const haystack = `${item.title || ''} ${item.type || ''} ${item.reason || ''}`.toLowerCase();
+      const searchMatch = !search || haystack.includes(search);
+      return dateMatch && typeMatch && searchMatch;
+    });
+  }, [filters.date, filters.search, filters.type, items]);
+
   return (
     <Screen>
-      <Card>
+      <FilterChips items={viewItems} value={mode} onChange={setMode} />
+      {mode === 'apply' ? <Card>
         <Text style={styles.sectionTitle}>Apply Leave</Text>
         <View style={styles.form}>
           <AppTextInput label="Title" onChangeText={value => update('title', value)} value={form.title} />
@@ -217,7 +244,7 @@ export const LeaveScreen = () => {
           <AppTextInput label="Reason" multiline placeholder="Write reason for leave" onChangeText={value => update('reason', value)} value={form.reason} />
           <AppButton icon={CalendarPlus} loading={submitting} onPress={submit} title="Apply Leave" />
         </View>
-      </Card>
+      </Card> : null}
       <CalendarPicker
         visible={Boolean(dateField)}
         value={dateField ? form[dateField] : ''}
@@ -225,17 +252,28 @@ export const LeaveScreen = () => {
         onSelect={date => update(dateField, date)}
       />
 
-      <Text style={styles.sectionTitle}>Leave History</Text>
-      <FlatList
-        data={items}
-        keyExtractor={item => item._id}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        renderItem={({item}) => <LeaveItem item={item} />}
-        ListEmptyComponent={
-          <EmptyState title="No leave applications" message="Approved, pending, and rejected leave requests will appear here." />
-        }
-        scrollEnabled={false}
-      />
+      {mode === 'applications' ? (
+        <>
+          <Card>
+            <Text style={styles.sectionTitle}>Leave Applications</Text>
+            <View style={styles.filterGrid}>
+              <AppTextInput label="Filter date" placeholder="YYYY-MM-DD" value={filters.date} onChangeText={date => setFilters(current => ({...current, date}))} style={styles.filterInput} />
+              <AppTextInput label="Type" value={filters.type} onChangeText={type => setFilters(current => ({...current, type}))} style={styles.filterInput} />
+              <AppTextInput label="Title letter" value={filters.search} onChangeText={search => setFilters(current => ({...current, search}))} style={styles.filterInput} />
+            </View>
+          </Card>
+          <FlatList
+            data={visibleItems}
+            keyExtractor={item => item._id}
+            refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+            renderItem={({item}) => <LeaveItem item={item} />}
+            ListEmptyComponent={
+              <EmptyState title="No leave applications" message="Approved, pending, and rejected leave requests will appear here." />
+            }
+            scrollEnabled={false}
+          />
+        </>
+      ) : null}
     </Screen>
   );
 };
@@ -249,6 +287,16 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.md,
     marginTop: spacing.md,
+  },
+  filterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  filterInput: {
+    flexBasis: '30%',
+    flexGrow: 1,
   },
   leaveItem: {
     marginBottom: spacing.md,

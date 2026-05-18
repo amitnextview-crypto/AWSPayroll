@@ -40,6 +40,7 @@ import {HomeScreen} from '../features/profile/HomeScreen';
 import {ProfileScreen} from '../features/profile/ProfileScreen';
 import {CompanyPoliciesScreen} from '../features/policies/CompanyPoliciesScreen';
 import {SalaryScreen} from '../features/salary/SalaryScreen';
+import {MyMonthlySalaryScreen} from '../features/salary/MyMonthlySalaryScreen';
 import {EmployeeTeamsScreen} from '../features/teams/EmployeeTeamsScreen';
 import {restoreSession} from '../store/authSlice';
 import {getThemeColors} from '../theme/colors';
@@ -106,6 +107,7 @@ const EmployeeStack = () => (
     <EmployeeStackNavigator.Screen name="Attendance" component={AttendanceScreen} />
     <EmployeeStackNavigator.Screen name="Leave" component={LeaveScreen} options={{title: 'Leave Applications'}} />
     <EmployeeStackNavigator.Screen name="Salary" component={SalaryScreen} />
+    <EmployeeStackNavigator.Screen name="MyMonthlySalaries" component={MyMonthlySalaryScreen} options={{title: 'My Monthly Salaries'}} />
     <EmployeeStackNavigator.Screen name="EmployeeExpenses" component={ExpenseScreen} options={{title: 'Submit Expense'}} />
     <EmployeeStackNavigator.Screen name="EmployeeTeam" component={EmployeeTeamsScreen} options={{title: 'Team'}} />
     <EmployeeStackNavigator.Screen name="CompanyPolicies" component={CompanyPoliciesScreen} options={{title: 'Company Policies'}} />

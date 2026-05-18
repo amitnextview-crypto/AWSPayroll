@@ -258,7 +258,7 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
               <Text style={styles.meta}>Salary till date: {formatCurrency(selectedMonthDetail.salaryTillDate || 0)}</Text>
               <Text style={styles.meta}>Payable days: {selectedMonthDetail.payableDays} / Attendance days before weekly-off deduction: {selectedMonthDetail.attendancePayableDays ?? selectedMonthDetail.payableDays}</Text>
               <Text style={styles.meta}>Present: {selectedMonthDetail.presentDays} / Leave: {selectedMonthDetail.leaveDays} / Half days: {selectedMonthDetail.halfDays || 0}</Text>
-              <Text style={styles.meta}>Weekly off paid: {selectedMonthDetail.weeklyOffPaidDays ?? selectedMonthDetail.sundayPaidDays ?? 0} / Weekly off unpaid: {selectedMonthDetail.weeklyOffUnpaidDays || 0}</Text>
+              <Text style={styles.meta}>Weekly off days: {selectedMonthDetail.weeklyOffDays ?? selectedMonthDetail.sundayPaidDays ?? 0} / Weekly off salary impact: 0 day</Text>
               <Text style={styles.meta}>Holiday paid: {selectedMonthDetail.holidayPaidDays || 0} / Absent: {selectedMonthDetail.absentDays}</Text>
               <Text style={styles.meta}>Today: {today.date}/{today.month}/{today.year}</Text>
               <Text style={styles.meta}>Cycle: {selectedMonthDetail.cycle?.startDate} to {selectedMonthDetail.cycle?.endDate} / Master paid days: {selectedMonthDetail.cycle?.openDaysInMonth}</Text>

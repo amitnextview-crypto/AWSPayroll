@@ -22,6 +22,8 @@ export const getLeaveApplications = data =>
   client.post('/employee/view-leave-applications', data);
 
 export const getSalary = data => client.post('/employee/view-salary', data);
+export const getMyMonthlySalary = params =>
+  client.get('/employee/monthly-salary', {params});
 
 export const getEmployeeTeam = id => client.get(`/employee/team/${id}`);
 export const getEmployeeTeamMembers = id => client.get(`/employee/team/${id}/members`);
