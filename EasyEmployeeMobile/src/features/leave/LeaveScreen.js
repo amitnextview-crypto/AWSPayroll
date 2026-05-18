@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Alert, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {CalendarPlus, ChevronLeft, ChevronRight} from 'lucide-react-native';
-import {applyLeave, getEmployeePayrollPolicies, getLeaveApplications} from '../../api/employeeApi';
+import {applyLeave, getLeaveApplications} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
@@ -23,24 +23,16 @@ const initialForm = {
   reason: '',
 };
 
-const leaveWords = ['leave', 'sick', 'casual', 'earned', 'paid', 'unpaid', 'maternity', 'paternity'];
-
-const extractLeaveTypes = policies => {
-  const values = new Set();
-  policies.forEach(policy => {
-    const text = `${policy.title || ''} ${policy.category || ''}`.toLowerCase();
-    if (leaveWords.some(word => text.includes(word))) {
-      if (policy.title) values.add(policy.title);
-    }
-    (policy.rules || []).forEach(rule => {
-      const ruleText = `${rule.label || ''} ${rule.value || ''}`.toLowerCase();
-      if (leaveWords.some(word => ruleText.includes(word))) {
-        if (rule.label) values.add(rule.label);
-      }
-    });
-  });
-  return Array.from(values);
-};
+const paidLeaveTypes = [
+  'Sick Leave',
+  'Casual Leave',
+  'Earned Leave',
+  'Privilege Leave',
+  'Compensatory Off',
+  'Maternity Leave',
+  'Paternity Leave',
+  'Bereavement Leave',
+];
 
 const CalendarPicker = ({visible, value, onClose, onSelect}) => {
   const base = value ? new Date(value) : new Date();
@@ -127,7 +119,6 @@ export const LeaveScreen = ({route}) => {
   const [form, setForm] = useState(initialForm);
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
-  const [leaveTypes, setLeaveTypes] = useState([]);
   const [showTypes, setShowTypes] = useState(false);
   const [dateField, setDateField] = useState('');
   const [loading, setLoading] = useState(false);
@@ -154,19 +145,6 @@ export const LeaveScreen = ({route}) => {
   useEffect(() => {
     if (route?.params?.mode) setMode(route.params.mode);
   }, [route?.params?.mode]);
-
-  useEffect(() => {
-    const loadTypes = async () => {
-      try {
-        const response = await getEmployeePayrollPolicies();
-        const types = extractLeaveTypes(response?.data || []);
-        setLeaveTypes(types.length ? types : ['Sick Leave', 'Casual Leave', 'Earned Leave']);
-      } catch (error) {
-        setLeaveTypes(['Sick Leave', 'Casual Leave', 'Earned Leave']);
-      }
-    };
-    loadTypes();
-  }, []);
 
   const submit = async () => {
     const required = ['title', 'type', 'period', 'startDate', 'endDate', 'reason'];
@@ -218,9 +196,10 @@ export const LeaveScreen = ({route}) => {
             </Pressable>
             {showTypes ? (
               <View style={styles.dropdown}>
-                {leaveTypes.map(type => (
+                {paidLeaveTypes.map(type => (
                   <Pressable key={type} style={styles.option} onPress={() => {
                     update('type', type);
+                    if (!form.title) update('title', type);
                     setShowTypes(false);
                   }}>
                     <Text style={styles.optionText}>{type}</Text>

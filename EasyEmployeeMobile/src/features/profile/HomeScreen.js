@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useSelector} from 'react-redux';
 import {BriefcaseBusiness, CalendarCheck, ClipboardList, IndianRupee, MapPin, ReceiptText, Users} from 'lucide-react-native';
-import {getAttendance, getEmployeeExpenses, getLeaveApplications, getMyMonthlySalary} from '../../api/employeeApi';
+import {getAttendance, getEmployeeExpenses, getLeaveApplications, getMyMonthlySalaries} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
 import {Screen} from '../../components/Screen';
@@ -38,7 +38,7 @@ export const HomeScreen = ({navigation}) => {
         getAttendance({employeeID: user.id, year: today.year, month: today.month}),
         getEmployeeExpenses(),
         getLeaveApplications({applicantID: user.id}),
-        getMyMonthlySalary({month: today.month, year: today.year}),
+        getMyMonthlySalaries(),
       ]);
       const attendanceResponse = attendanceResult.status === 'fulfilled' ? attendanceResult.value : {};
       const expenseResponse = expenseResult.status === 'fulfilled' ? expenseResult.value : {};
@@ -53,7 +53,11 @@ export const HomeScreen = ({navigation}) => {
         : todayRecord?.attendanceIn
           ? 'Checked in'
           : 'Not checked in';
-      const salaryDetail = salaryResponse?.data || salaryResponse?.salary || {};
+      const salaryRows = salaryResponse?.data || [];
+      const salaryDetail =
+        salaryRows.find(item => Number(item.month) === today.month && Number(item.year) === today.year) ||
+        salaryRows[0] ||
+        {};
       setSummary({
         attendanceStatus,
         expenseCount: (expenseResponse?.data || expenseResponse?.expenses || []).length,
