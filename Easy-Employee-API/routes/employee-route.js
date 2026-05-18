@@ -40,6 +40,7 @@ router.post(
 );
 router.post("/view-salary", asyncMiddleware(userController.viewSalary));
 router.get("/monthly-salary", asyncMiddleware(userController.calculateMyMonthlySalary));
+router.get("/monthly-salaries", asyncMiddleware(userController.calculateMyMonthlySalaryList));
 router.post(
     "/checkin-employee-attendance",
     asyncMiddleware(userController.checkInEmployeeAttendance)

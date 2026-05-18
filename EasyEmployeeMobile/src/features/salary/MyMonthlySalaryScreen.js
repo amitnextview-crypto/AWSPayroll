@@ -1,7 +1,8 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {Calculator} from 'lucide-react-native';
-import {getMyMonthlySalary} from '../../api/employeeApi';
+import {ActivityIndicator, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {Calculator, X} from 'lucide-react-native';
+import {useSelector} from 'react-redux';
+import {getMyMonthlySalaries} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
@@ -12,122 +13,122 @@ import {spacing} from '../../theme/spacing';
 import {todayParts} from '../../utils/date';
 import {formatCurrency} from '../../utils/money';
 
+const userId = user => String(user?.username || user?.employeeCode || user?.id || user?._id || '');
+
+const monthLabel = item =>
+  new Date(Number(item.year), Number(item.month) - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+
 export const MyMonthlySalaryScreen = () => {
+  const {user} = useSelector(state => state.auth);
   const today = useMemo(() => todayParts(), []);
-  const [month, setMonth] = useState(String(today.month));
-  const [year, setYear] = useState(String(today.year));
-  const [detail, setDetail] = useState(null);
+  const [searchMonth, setSearchMonth] = useState('');
+  const [searchYear, setSearchYear] = useState('');
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const monthOptions = useMemo(() => {
-    const current = new Date(today.year, today.month - 1, 1);
-    return Array.from({length: 12}, (_, index) => {
-      const date = new Date(current);
-      date.setMonth(current.getMonth() - index);
-      return {
-        month: date.getMonth() + 1,
-        year: date.getFullYear(),
-        label: date.toLocaleDateString('en-US', {month: 'long', year: 'numeric'}),
-      };
-    });
-  }, [today.month, today.year]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await getMyMonthlySalary({
-        month: Number(month) || today.month,
-        year: Number(year) || today.year,
-      });
-      setDetail(response?.data || null);
+      const response = await getMyMonthlySalaries();
+      const nextRows = (response?.data || []).map(detail => ({
+        ...detail,
+        monthLabel: monthLabel(detail),
+        amount: detail.totalPay ?? detail.salaryTillDate ?? 0,
+      }));
+      setRows(nextRows);
     } catch (err) {
-      setDetail(null);
-      setError(err.message || 'Monthly salary could not be loaded.');
+      setRows([]);
+      setError(err.message || 'Monthly salaries could not be loaded. Please check network and try again.');
     } finally {
       setLoading(false);
     }
-  }, [month, today.month, today.year, year]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const openMonthDetail = option => {
-    setMonth(String(option.month));
-    setYear(String(option.year));
+  const visibleRows = useMemo(() => {
+    if (!activeFilter) return rows;
+    return rows.filter(item => Number(item.month) === activeFilter.month && Number(item.year) === activeFilter.year);
+  }, [activeFilter, rows]);
+
+  const applySearch = () => {
+    const month = Number(searchMonth);
+    const year = Number(searchYear);
+    if (!month || !year) {
+      setActiveFilter(null);
+      return;
+    }
+    setActiveFilter({month, year});
   };
 
-  const salaryIsFinal = Boolean(detail?.isFinalSalary || detail?.cycle?.isFinalSalary);
-  const salaryLabel = detail?.salaryLabel || detail?.cycle?.salaryLabel || (salaryIsFinal ? 'Final Salary' : 'Salary Till Date');
+  const clearSearch = () => {
+    setSearchMonth('');
+    setSearchYear('');
+    setActiveFilter(null);
+  };
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <Card>
-        <Text style={styles.title}>My Monthly Salary</Text>
+        <Text style={styles.title}>My Monthly Salaries</Text>
         <View style={styles.twoCol}>
-          <AppTextInput label="Month" keyboardType="numeric" value={month} onChangeText={value => setMonth(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
-          <AppTextInput label="Year" keyboardType="numeric" value={year} onChangeText={value => setYear(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+          <AppTextInput
+            keyboardType="numeric"
+            label="Month"
+            placeholder="1-12"
+            value={searchMonth}
+            onChangeText={value => setSearchMonth(value.replace(/[^0-9]/g, ''))}
+            style={styles.flex}
+          />
+          <AppTextInput
+            keyboardType="numeric"
+            label="Year"
+            placeholder={String(today.year)}
+            value={searchYear}
+            onChangeText={value => setSearchYear(value.replace(/[^0-9]/g, ''))}
+            style={styles.flex}
+          />
         </View>
         <View style={styles.actions}>
-          <AppButton icon={Calculator} title="Search Salary" loading={loading} onPress={load} />
+          <AppButton icon={Calculator} title="Search" loading={loading} onPress={applySearch} />
+          <AppButton icon={X} title="Show All" variant="muted" disabled={loading} onPress={clearSearch} />
         </View>
+        <Text style={styles.meta}>
+          {activeFilter ? `${visibleRows.length} record for ${activeFilter.month}/${activeFilter.year}` : `${visibleRows.length} salary records from joining month`}
+        </Text>
       </Card>
 
-      {loading && !detail ? <ActivityIndicator color={colors.primary} /> : null}
+      {loading && !rows.length ? <ActivityIndicator color={colors.primary} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Card>
-        <Text style={styles.title}>Month List</Text>
-        {monthOptions.map(option => {
-          const selected = Number(month) === option.month && Number(year) === option.year;
-          return (
-            <Pressable
-              key={`${option.month}-${option.year}`}
-              onPress={() => openMonthDetail(option)}
-              style={[styles.monthRow, selected ? styles.selectedMonthRow : null]}>
-              <Text style={[styles.monthName, selected ? styles.selectedMonthText : null]}>{option.label}</Text>
-              <Text style={selected ? styles.selectedMonthMeta : styles.meta}>
-                {option.month === today.month && option.year === today.year ? 'Current month' : 'Past month'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </Card>
+      {!loading && !visibleRows.length ? (
+        <EmptyState title="No monthly salary" message="Salary records will appear after salary assignment and attendance calculation." />
+      ) : null}
 
-      {detail ? (
-        <Card>
-          <Text style={styles.title}>{detail.month}/{detail.year} Salary</Text>
-          <View style={[styles.salaryBox, salaryIsFinal ? styles.salaryBoxFinal : null]}>
-            <Text style={[styles.salaryBoxTitle, salaryIsFinal ? styles.salaryBoxTitleFinal : null]}>{salaryLabel}</Text>
-            <Text style={[styles.salaryBoxAmount, salaryIsFinal ? styles.salaryBoxAmountFinal : null]}>
-              {formatCurrency(detail.totalPay || 0)}
-            </Text>
-          </View>
-          <Text style={styles.meta}>Assigned net salary: {formatCurrency(detail.assignedNetPay || 0)}</Text>
-          <Text style={styles.meta}>Assigned gross salary: {formatCurrency(detail.assignedGross || detail.earnings?.gross || 0)}</Text>
-          <Text style={styles.meta}>Per day salary: {formatCurrency(detail.perDaySalary || 0)}</Text>
-          <Text style={styles.meta}>Salary till date: {formatCurrency(detail.salaryTillDate || 0)}</Text>
-          <Text style={styles.meta}>Approved expenses: {formatCurrency(detail.totalExpenses || 0)}</Text>
-          <Text style={styles.meta}>Cycle: {detail.cycle?.startDate || '-'} to {detail.cycle?.endDate || '-'}</Text>
-          {detail.cycle?.fullEndDate && detail.cycle.fullEndDate !== detail.cycle?.endDate ? (
-            <Text style={styles.meta}>Cycle final end date: {detail.cycle.fullEndDate}</Text>
-          ) : null}
-          <Text style={styles.meta}>Fixed paid days: {detail.cycle?.openDaysInMonth || '-'}</Text>
-          <Text style={styles.meta}>Payable days: {detail.payableDays} / Present: {detail.presentDays} / Half day: {detail.halfDays || 0}</Text>
-          <Text style={styles.meta}>Approved leave: {detail.leaveDays} / Paid holiday: {detail.holidayPaidDays || 0} / Weekly off: {detail.weeklyOffDays || 0}</Text>
-          <View style={styles.summary}>
-            {[...(detail.attendanceDetails || [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).map(day => (
-              <Text key={day.date} style={styles.summaryText}>
-                {day.date} {day.day}: {day.status} / {day.timeStatus} / {day.payableDays} day / {day.reason}
-              </Text>
-            ))}
+      {visibleRows.map(item => (
+        <Card key={`${item.year}-${item.month}`}>
+          <View style={styles.rowHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.month}>{item.monthLabel}</Text>
+              <Text style={styles.name}>{item.name || user?.name || user?.username || '-'}</Text>
+              <Text style={styles.meta}>Email: {item.email || user?.email || '-'}</Text>
+              <Text style={styles.meta}>ID: {item.username || item.employeeCode || userId(user) || '-'}</Text>
+            </View>
+            <View style={styles.amountBox}>
+              <Text style={styles.amountLabel}>{item.salaryLabel || 'Amount'}</Text>
+              <Text style={styles.amount}>{formatCurrency(item.amount || 0)}</Text>
+            </View>
           </View>
         </Card>
-      ) : !loading ? (
-        <EmptyState title="No monthly salary" message="Your monthly salary calculation will appear after salary assignment and attendance records." />
-      ) : null}
+      ))}
     </Screen>
   );
 };
@@ -137,19 +138,12 @@ const styles = StyleSheet.create({
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
-  monthRow: {borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: spacing.md},
-  monthName: {color: colors.text, fontSize: 18, fontWeight: '900'},
-  selectedMonthRow: {backgroundColor: colors.primary, borderRadius: 8, borderBottomWidth: 0, marginVertical: spacing.xs, paddingHorizontal: spacing.md},
-  selectedMonthText: {color: colors.surface},
-  selectedMonthMeta: {color: colors.surface, fontWeight: '800', marginTop: spacing.xs},
-  salaryBox: {backgroundColor: colors.surfaceMuted, borderRadius: 8, marginTop: spacing.sm, padding: spacing.md},
-  salaryBoxFinal: {backgroundColor: colors.success},
-  salaryBoxTitle: {color: colors.textMuted, fontSize: 13, fontWeight: '900'},
-  salaryBoxTitleFinal: {color: colors.surface},
-  salaryBoxAmount: {color: colors.success, fontSize: 22, fontWeight: '900', marginTop: spacing.xs},
-  salaryBoxAmountFinal: {color: colors.surface},
+  rowHeader: {alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between'},
+  month: {color: colors.primary, fontSize: 13, fontWeight: '900', marginBottom: spacing.xs},
+  name: {color: colors.text, fontSize: 17, fontWeight: '900'},
   meta: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
-  summary: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginVertical: spacing.md, padding: spacing.md},
-  summaryText: {color: colors.textMuted, fontWeight: '800'},
+  amountBox: {alignItems: 'flex-end', backgroundColor: colors.surfaceMuted, borderRadius: 8, minWidth: 130, padding: spacing.md},
+  amountLabel: {color: colors.textMuted, fontSize: 11, fontWeight: '900'},
+  amount: {color: colors.success, fontSize: 18, fontWeight: '900', marginTop: spacing.xs},
   error: {color: colors.danger},
 });

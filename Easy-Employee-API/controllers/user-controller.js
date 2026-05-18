@@ -910,6 +910,50 @@ class UserController {
     return originalJson({ success: true, data: detail, cycle: payload.cycle, message: 'Monthly salary calculated successfully' });
   }
 
+  calculateMyMonthlySalaryList = async (req, res) => {
+    const employeeID = String(req.user?._id || '');
+    if (!employeeID) {
+      return res.status(401).json({ success: false, message: 'Login required to view monthly salary' });
+    }
+
+    const employee = await User.findById(employeeID);
+    const currentDate = new Date();
+    const joiningDate = new Date(employee?.date || employee?.createdAt || currentDate);
+    const start = Number.isNaN(joiningDate.getTime())
+      ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+      : new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
+    const cursor = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const months = [];
+
+    while (cursor >= start) {
+      months.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });
+      cursor.setMonth(cursor.getMonth() - 1);
+    }
+
+    const rows = [];
+    for (const option of months) {
+      let payload = null;
+      const salaryReq = {
+        ...req,
+        query: { employeeID, month: option.month, year: option.year },
+      };
+      const salaryRes = {
+        json: data => {
+          payload = data;
+          return data;
+        },
+        status: () => salaryRes,
+      };
+      await this.calculateCurrentMonthSalaries(salaryReq, salaryRes);
+      if (payload?.success) {
+        const detail = (payload.data || []).find(item => String(item.employeeID) === employeeID);
+        if (detail) rows.push(detail);
+      }
+    }
+
+    return res.json({ success: true, data: rows, message: 'Monthly salary list calculated successfully' });
+  }
+
   exportMonthlySalariesCsv = async (req, res) => {
     const originalJson = res.json.bind(res);
     let payload = null;
