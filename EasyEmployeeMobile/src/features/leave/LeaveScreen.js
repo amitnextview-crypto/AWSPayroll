@@ -126,7 +126,7 @@ export const LeaveScreen = ({route}) => {
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState(initialForm);
   const [items, setItems] = useState([]);
-  const [filters, setFilters] = useState({date: '', type: '', search: ''});
+  const [search, setSearch] = useState('');
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [showTypes, setShowTypes] = useState(false);
   const [dateField, setDateField] = useState('');
@@ -197,17 +197,12 @@ export const LeaveScreen = ({route}) => {
   };
 
   const visibleItems = useMemo(() => {
-    const date = filters.date.trim();
-    const type = filters.type.trim().toLowerCase();
-    const search = filters.search.trim().toLowerCase();
+    const term = search.trim().toLowerCase();
     return items.filter(item => {
-      const dateMatch = !date || item.startDate === date || item.endDate === date || item.appliedDate === date;
-      const typeMatch = !type || String(item.type || '').toLowerCase().includes(type);
-      const haystack = `${item.title || ''} ${item.type || ''} ${item.reason || ''}`.toLowerCase();
-      const searchMatch = !search || haystack.includes(search);
-      return dateMatch && typeMatch && searchMatch;
+      const haystack = `${item.title || ''} ${item.type || ''} ${item.reason || ''} ${item.startDate || ''} ${item.endDate || ''} ${item.appliedDate || ''} ${item.adminResponse || ''}`.toLowerCase();
+      return !term || haystack.includes(term);
     });
-  }, [filters.date, filters.search, filters.type, items]);
+  }, [items, search]);
 
   return (
     <Screen>
@@ -256,11 +251,12 @@ export const LeaveScreen = ({route}) => {
         <>
           <Card>
             <Text style={styles.sectionTitle}>Leave Applications</Text>
-            <View style={styles.filterGrid}>
-              <AppTextInput label="Filter date" placeholder="YYYY-MM-DD" value={filters.date} onChangeText={date => setFilters(current => ({...current, date}))} style={styles.filterInput} />
-              <AppTextInput label="Type" value={filters.type} onChangeText={type => setFilters(current => ({...current, type}))} style={styles.filterInput} />
-              <AppTextInput label="Title letter" value={filters.search} onChangeText={search => setFilters(current => ({...current, search}))} style={styles.filterInput} />
-            </View>
+            <AppTextInput
+              label="Search"
+              placeholder="Search by date, type, title, reason, or status"
+              value={search}
+              onChangeText={setSearch}
+            />
           </Card>
           <FlatList
             data={visibleItems}
@@ -287,16 +283,6 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.md,
     marginTop: spacing.md,
-  },
-  filterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginTop: spacing.md,
-  },
-  filterInput: {
-    flexBasis: '30%',
-    flexGrow: 1,
   },
   leaveItem: {
     marginBottom: spacing.md,

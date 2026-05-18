@@ -209,7 +209,7 @@ export const AdminAttendanceScreen = ({route}) => {
       const day = dayNames[new Date(year, month - 1, date).getDay()];
       const isWeeklyOff = weeklyOffDays.includes(day.toLowerCase());
       const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, year, month, date);
-      const status = record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
+      const status = isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
       rows.push({
         key: `${year}-${month}-${date}`,
         id: record?._id || record?.id || '',
@@ -221,10 +221,10 @@ export const AdminAttendanceScreen = ({route}) => {
         date,
         day: record?.day || day,
         status,
-        attendanceIn: record?.attendanceIn || '-',
-        attendanceOut: record?.attendanceOut || '-',
-        late: record?.late || '-',
-        totalHours: record?.totalHours || '-',
+        attendanceIn: isWeeklyOff ? '-' : record?.attendanceIn || '-',
+        attendanceOut: isWeeklyOff ? '-' : record?.attendanceOut || '-',
+        late: isWeeklyOff ? '-' : record?.late || '-',
+        totalHours: isWeeklyOff ? '-' : record?.totalHours || '-',
         timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : status === 'Weekly Off' ? 'Weekly Off' : '-'),
         reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, year, month, date)),
       });

@@ -28,14 +28,14 @@ const AttendanceItem = ({item}) => (
         <Text style={styles.itemTitle}>{formatDisplayDate(item)}</Text>
         <Text style={styles.itemSubtitle}>{item.day}</Text>
       </View>
-      <StatusPill value={item.status || (item.present ? 'Present' : 'Absent')} />
+      <StatusPill value={item.displayStatus || item.status || (item.present ? 'Present' : 'Absent')} />
     </View>
     <View style={styles.grid}>
       <Text style={styles.meta}>In: {item.attendanceIn || '-'}</Text>
       <Text style={styles.meta}>Out: {item.attendanceOut || '-'}</Text>
       <Text style={styles.meta}>Late: {item.late || '-'}</Text>
       <Text style={styles.meta}>Hours: {item.totalHours || '-'}</Text>
-      <Text style={styles.meta}>Status: {item.timeStatus || item.status || '-'}</Text>
+      <Text style={styles.meta}>Status: {item.displayTimeStatus || item.timeStatus || item.displayStatus || item.status || '-'}</Text>
       <Text style={styles.meta}>Reason: {item.reason || '-'}</Text>
     </View>
   </Card>
@@ -87,20 +87,55 @@ export const AttendanceScreen = () => {
     );
   }, [records]);
 
+  const isWeeklyOffDate = useCallback(
+    item => {
+      const day = item?.day || dayNames[new Date(Number(item?.year), Number(item?.month) - 1, Number(item?.date)).getDay()];
+      return weeklyOffDays.includes(String(day || '').toLowerCase());
+    },
+    [weeklyOffDays],
+  );
+
+  const displayRecords = useMemo(
+    () =>
+      records.map(item =>
+        isWeeklyOffDate(item)
+          ? {
+              ...item,
+              displayStatus: 'Weekly Off',
+              displayTimeStatus: 'Weekly Off',
+              reason: item.reason || `${item.day || 'Day'} weekly off by master salary rule`,
+            }
+          : item,
+      ),
+    [isWeeklyOffDate, records],
+  );
+
   const visibleRecords = useMemo(() => {
-    const filtered = records.filter(item => {
+    const filtered = displayRecords.filter(item => {
       if (filters.mode === 'day' && filters.day) {
         return String(item.date) === String(filters.day);
       }
       return true;
     });
     return [...filtered].sort((a, b) => Number(b.date) - Number(a.date));
-  }, [filters.day, filters.mode, records]);
+  }, [displayRecords, filters.day, filters.mode]);
 
   const monthlyCount = useMemo(
-    () => records.filter(item => item.present && String(item.status || '').toLowerCase() !== 'weekly off').length,
-    [records],
+    () => records.filter(item => item.present && !isWeeklyOffDate(item) && String(item.status || '').toLowerCase() !== 'weekly off').length,
+    [isWeeklyOffDate, records],
   );
+  const weeklyOffMonthCount = useMemo(() => {
+    const selectedMonth = Number(filters.month) || currentParts.month;
+    const selectedYear = Number(filters.year) || currentParts.year;
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const maxDay = selectedYear === currentParts.year && selectedMonth === currentParts.month ? currentParts.date : daysInMonth;
+    let count = 0;
+    for (let date = 1; date <= maxDay; date += 1) {
+      const day = dayNames[new Date(selectedYear, selectedMonth - 1, date).getDay()];
+      if (weeklyOffDays.includes(day.toLowerCase())) count += 1;
+    }
+    return count;
+  }, [currentParts.date, currentParts.month, currentParts.year, filters.month, filters.year, weeklyOffDays]);
   const todayDayName = dayNames[new Date(currentParts.year, currentParts.month - 1, currentParts.date).getDay()];
   const isWeeklyOffToday = weeklyOffDays.includes(todayDayName.toLowerCase());
 
@@ -220,8 +255,9 @@ export const AttendanceScreen = () => {
           <Text style={styles.summaryLabel}>This month</Text>
           <Text style={styles.summaryValue}>{monthlyCount} present days</Text>
           <Text style={styles.summarySub}>
-            Today: {todayRecord?.attendanceOut ? 'Completed' : todayRecord?.attendanceIn ? 'Checked in' : 'Not checked in'}
+            Today: {isWeeklyOffToday ? 'Weekly off' : todayRecord?.attendanceOut ? 'Completed' : todayRecord?.attendanceIn ? 'Checked in' : 'Not checked in'}
           </Text>
+          <Text style={styles.summarySub}>{weeklyOffMonthCount} weekly off day(s)</Text>
           {isWeeklyOffToday ? <Text style={styles.summarySub}>{todayDayName} weekly off as per master salary rule</Text> : null}
         </View>
       </Card>

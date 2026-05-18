@@ -1156,7 +1156,9 @@ createUser = async (req, res) => {
       );
       const presentToday = presentIds.size;
       const leaveToday = leavesToday.filter(leave => workforceIds.has(String(leave.applicantID))).length;
-      const absentUsers = workforceUsers.filter(user => !presentIds.has(String(user._id)) && !approvedLeaveIds.has(String(user._id)));
+      const absentUsers = isWeeklyOffToday
+        ? []
+        : workforceUsers.filter(user => !presentIds.has(String(user._id)) && !approvedLeaveIds.has(String(user._id)));
       const absentToday = absentUsers.length;
       const pendingLeaveRequests = pendingLeaves.filter(leave => workforceIds.has(String(leave.applicantID))).length;
       const payrollSummary = salarySummary[0] || { gross: 0, netPay: 0, deductions: 0, employees: 0 };
@@ -1251,6 +1253,10 @@ createUser = async (req, res) => {
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const d = new Date();
     const todayDay = days[d.getDay()];
+    const cycle = await getPayrollCycleSettings(d.getFullYear(), d.getMonth() + 1);
+    if (cycle.weeklyOffDays.includes(todayDay.toLowerCase())) {
+      return res.json({ success: false, message: `${todayDay} is weekly off as per master salary rule.` });
+    }
 
       const newAttendance = {
       employeeID,
@@ -1267,22 +1273,6 @@ createUser = async (req, res) => {
       return res.json({ success: false, message: "Attendance already marked!" });
 
     // 🟢 If Sunday — mark auto-present, no In/Out times
-    if (todayDay === "Sunday") {
-      const resp = await attendanceService.markAttendance({
-        ...newAttendance,
-        attendanceIn: "-",
-        attendanceOut: "-",
-        totalHours: "-",
-        late: "-",
-      });
-      return res.json({
-        success: true,
-        message: "Sunday marked automatically as Present",
-        data: resp,
-      });
-    }
-
-    // Otherwise normal marking
     const resp = await attendanceService.markAttendance(newAttendance);
     res.json({
       success: true,

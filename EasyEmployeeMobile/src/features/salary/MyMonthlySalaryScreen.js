@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {Calculator} from 'lucide-react-native';
 import {getMyMonthlySalary} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
@@ -19,6 +19,19 @@ export const MyMonthlySalaryScreen = () => {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const monthOptions = useMemo(() => {
+    const current = new Date(today.year, today.month - 1, 1);
+    return Array.from({length: 12}, (_, index) => {
+      const date = new Date(current);
+      date.setMonth(current.getMonth() - index);
+      return {
+        month: date.getMonth() + 1,
+        year: date.getFullYear(),
+        label: date.toLocaleDateString('en-US', {month: 'long', year: 'numeric'}),
+      };
+    });
+  }, [today.month, today.year]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +54,11 @@ export const MyMonthlySalaryScreen = () => {
     load();
   }, [load]);
 
+  const openMonthDetail = option => {
+    setMonth(String(option.month));
+    setYear(String(option.year));
+  };
+
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <Card>
@@ -56,6 +74,24 @@ export const MyMonthlySalaryScreen = () => {
 
       {loading && !detail ? <ActivityIndicator color={colors.primary} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <Card>
+        <Text style={styles.title}>Month List</Text>
+        {monthOptions.map(option => {
+          const selected = Number(month) === option.month && Number(year) === option.year;
+          return (
+            <Pressable
+              key={`${option.month}-${option.year}`}
+              onPress={() => openMonthDetail(option)}
+              style={[styles.monthRow, selected ? styles.selectedMonthRow : null]}>
+              <Text style={[styles.monthName, selected ? styles.selectedMonthText : null]}>{option.label}</Text>
+              <Text style={selected ? styles.selectedMonthMeta : styles.meta}>
+                {option.month === today.month && option.year === today.year ? 'Current month' : 'Past month'}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </Card>
 
       {detail ? (
         <Card>
@@ -90,6 +126,11 @@ const styles = StyleSheet.create({
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
+  monthRow: {borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: spacing.md},
+  monthName: {color: colors.text, fontSize: 18, fontWeight: '900'},
+  selectedMonthRow: {backgroundColor: colors.primary, borderRadius: 8, borderBottomWidth: 0, marginVertical: spacing.xs, paddingHorizontal: spacing.md},
+  selectedMonthText: {color: colors.surface},
+  selectedMonthMeta: {color: colors.surface, fontWeight: '800', marginTop: spacing.xs},
   net: {color: colors.success, fontSize: 20, fontWeight: '900', marginTop: spacing.sm},
   meta: {color: colors.textMuted, lineHeight: 20, marginTop: spacing.xs},
   summary: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginVertical: spacing.md, padding: spacing.md},
