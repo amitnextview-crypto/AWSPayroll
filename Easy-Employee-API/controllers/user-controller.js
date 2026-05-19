@@ -244,6 +244,7 @@ const buildBankSalaryRows = payload => [
     'TDS Monthly',
     'Total Deductions',
     'Final Salary Paid',
+    'Approved Expense Details',
   ],
   ...(payload.data || []).map(item => [
     item.name,
@@ -274,6 +275,9 @@ const buildBankSalaryRows = payload => [
     item.deductions?.tdsMonthly || 0,
     item.deductions?.totalDeductions || 0,
     item.totalPay || 0,
+    (item.approvedExpenseItems || [])
+      .map(expense => `${expense.appliedDate || '-'} ${expense.type || 'Expense'}: ${expense.amount || 0}`)
+      .join('; '),
   ]),
 ];
 
@@ -861,11 +865,14 @@ class UserController {
     const year = resolved.year;
     const month = resolved.month;
     const cycle = resolved.cycle;
+    const forceFullCycle = String(req.query.fullCycle || '').toLowerCase() === 'true';
     let effectiveEndDate = cycle.endDate;
-    if (today < cycle.startDate) {
-      effectiveEndDate = cycle.startDate;
-    } else if (today <= cycle.endDate && cycle.endDate > today) {
-      effectiveEndDate = today;
+    if (!forceFullCycle) {
+      if (today < cycle.startDate) {
+        effectiveEndDate = cycle.startDate;
+      } else if (today <= cycle.endDate && cycle.endDate > today) {
+        effectiveEndDate = today;
+      }
     }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
     const shouldPayWeeklyOff = cycle.openDaysInMonth >= 30;
@@ -873,7 +880,7 @@ class UserController {
     const cycleEndIso = formatIsoDate(effectiveEndDate);
     const fullCycleEndIso = formatIsoDate(cycle.endDate);
     const finalDisplayDate = addDays(cycle.endDate, 1);
-    const isFinalSalary = today >= finalDisplayDate;
+    const isFinalSalary = forceFullCycle || today >= finalDisplayDate;
     const salaryLabel = isFinalSalary ? 'Final Salary' : 'Salary Till Date';
     const attendanceRangeQuery = monthYearPairsForRange(cycle.startDate, effectiveEndDate);
     const requestedEmployeeID = req.query.employeeID && mongoose.Types.ObjectId.isValid(req.query.employeeID)
@@ -886,7 +893,7 @@ class UserController {
       User.find(workforceQuery),
       UserSalaries.find({}),
       Attendance.find(attendanceRangeQuery.length ? { $or: attendanceRangeQuery } : { year, month }),
-      Expense.find({ adminResponse: "Approved" }),
+      Expense.find({ adminResponse: "Approved", appliedDate: { $gte: cycleStartIso, $lte: cycleEndIso } }),
       Leave.find({
         adminResponse: 'Approved',
         startDate: { $lte: cycleEndIso },
@@ -1188,6 +1195,13 @@ class UserController {
         absentDays,
         salaryTillDate,
         totalExpenses,
+        approvedExpenseItems: approvedExpenseItems.map(item => ({
+          id: item._id,
+          type: item.type,
+          amount: item.amount,
+          appliedDate: item.appliedDate,
+          description: item.description,
+        })),
         totalPay,
         isFinalSalary,
         salaryLabel,
@@ -1293,7 +1307,10 @@ class UserController {
       await this.calculateCurrentMonthSalaries(salaryReq, salaryRes);
       if (payload?.success) {
         const detail = (payload.data || []).find(item => String(item.employeeID) === employeeID);
-        if (detail) rows.push(detail);
+        const key = detail && `${detail.cycle?.startDate || ''}-${detail.cycle?.fullEndDate || detail.cycle?.endDate || ''}`;
+        if (detail && key && !rows.some(item => `${item.cycle?.startDate || ''}-${item.cycle?.fullEndDate || item.cycle?.endDate || ''}` === key)) {
+          rows.push(detail);
+        }
       }
     }
 
@@ -1316,6 +1333,7 @@ class UserController {
       payload = data;
       return data;
     };
+    req.query.fullCycle = 'true';
     await this.calculateCurrentMonthSalaries(req, res);
     res.json = originalJson;
     if (!payload?.success) {

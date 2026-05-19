@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, NativeModules, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {Calculator, FileSpreadsheet, FileText} from 'lucide-react-native';
+import {Calculator, FileSpreadsheet} from 'lucide-react-native';
 import {
   calculateCurrentMonthSalaries,
   exportAdminMonthlySalaries,
@@ -73,6 +73,8 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
   const today = useMemo(() => todayParts(), []);
   const [payrollMonth, setPayrollMonth] = useState(String(today.month));
   const [payrollYear, setPayrollYear] = useState(String(today.year));
+  const [exportMonth, setExportMonth] = useState(String(today.month));
+  const [exportYear, setExportYear] = useState(String(today.year));
   const [payrollRows, setPayrollRows] = useState([]);
   const [payrollCycle, setPayrollCycle] = useState(null);
   const [selectedMonthlyEmployee, setSelectedMonthlyEmployee] = useState(null);
@@ -120,23 +122,28 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
     }
   };
 
-  const exportPayroll = async (format = 'xlsx') => {
+  const exportPayroll = async () => {
+    const month = Number(exportMonth);
+    const year = Number(exportYear);
+    if (!month || month < 1 || month > 12 || !year) {
+      setToast('Enter a valid export month and year.');
+      return;
+    }
     setLoading(true);
     try {
-      const isPdf = format === 'pdf';
       const file = await exportAdminMonthlySalaries({
-        pastCycle: true,
-        format,
+        month,
+        year,
+        format: 'xlsx',
       });
       const base64 = toBase64(file);
       if (!SalaryFileModule?.saveBase64File) {
         throw new Error('Download service is not available. Please rebuild the app.');
       }
-      const extension = isPdf ? 'pdf' : 'xlsx';
-      const mimeType = isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      const fileName = `bank-salary-upload-${Date.now()}.${extension}`;
+      const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const fileName = `bank-salary-upload-${year}-${String(month).padStart(2, '0')}-${Date.now()}.xlsx`;
       const uri = await SalaryFileModule.saveBase64File(fileName, mimeType, base64);
-      setToast(`Past cycle bank salary ${extension.toUpperCase()} downloaded.`);
+      setToast(`Salary XLSX downloaded for ${month}/${year}.`);
       Alert.alert('Salary export downloaded', `${fileName} saved in Downloads/AWSPayroll.\n${uri || ''}`);
     } catch (err) {
       setToast(err.message || 'Salary export could not be prepared.');
@@ -238,8 +245,14 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
         </View>
         <View style={styles.actions}>
           <AppButton icon={Calculator} title="Search Salaries" loading={loading} onPress={loadPayroll} />
-          <AppButton icon={FileSpreadsheet} title="Download XLSX" variant="muted" loading={loading} onPress={() => exportPayroll('xlsx')} />
-          <AppButton icon={FileText} title="Download PDF" variant="muted" loading={loading} onPress={() => exportPayroll('pdf')} />
+          <AppButton icon={FileSpreadsheet} title="Download XLSX" variant="muted" loading={loading} onPress={exportPayroll} />
+        </View>
+        <View style={styles.exportBox}>
+          <Text style={styles.exportTitle}>XLSX Export Cycle</Text>
+          <View style={styles.twoCol}>
+            <AppTextInput label="Export month" keyboardType="numeric" value={exportMonth} onChangeText={value => setExportMonth(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+            <AppTextInput label="Export year" keyboardType="numeric" value={exportYear} onChangeText={value => setExportYear(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+          </View>
         </View>
         {payrollCycle ? (
           <Text style={styles.count}>
@@ -386,6 +399,8 @@ const styles = StyleSheet.create({
   dayPay: {color: colors.primary, fontWeight: '900'},
   net: {color: colors.text, fontSize: 17, fontWeight: '900', marginTop: spacing.xs},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
+  exportBox: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.sm, marginTop: spacing.md, padding: spacing.md},
+  exportTitle: {color: colors.text, fontSize: 13, fontWeight: '900'},
   error: {color: colors.danger},
   empty: {color: colors.textMuted, textAlign: 'center'},
 });

@@ -9,6 +9,7 @@ import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
 import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
+import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 import {todayParts} from '../../utils/date';
@@ -21,6 +22,14 @@ const monthLabel = item =>
     month: 'long',
     year: 'numeric',
   });
+
+const cycleKey = item =>
+  `${item.cycle?.startDate || item.year}-${item.cycle?.fullEndDate || item.cycle?.endDate || item.month}`;
+
+const recentAttendance = item =>
+  [...(item.attendanceDetails || [])]
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 7);
 
 export const MyMonthlySalaryScreen = () => {
   const {user} = useSelector(state => state.auth);
@@ -37,11 +46,18 @@ export const MyMonthlySalaryScreen = () => {
     setError('');
     try {
       const response = await getMyMonthlySalaries();
-      const nextRows = (response?.data || []).map(detail => ({
-        ...detail,
-        monthLabel: monthLabel(detail),
-        amount: detail.totalPay ?? detail.salaryTillDate ?? 0,
-      }));
+      const seen = new Set();
+      const nextRows = (response?.data || []).reduce((list, detail) => {
+        const key = cycleKey(detail);
+        if (seen.has(key)) return list;
+        seen.add(key);
+        list.push({
+          ...detail,
+          monthLabel: monthLabel(detail),
+          amount: detail.totalPay ?? detail.salaryTillDate ?? 0,
+        });
+        return list;
+      }, []);
       setRows(nextRows);
     } catch (err) {
       setRows([]);
@@ -120,18 +136,33 @@ export const MyMonthlySalaryScreen = () => {
       ) : null}
 
       {visibleRows.map(item => (
-        <Card key={`${item.year}-${item.month}`}>
+        <Card key={cycleKey(item)}>
           <View style={styles.rowHeader}>
             <View style={styles.flex}>
               <Text style={styles.month}>{item.monthLabel}</Text>
               <Text style={styles.name}>{item.name || user?.name || user?.username || '-'}</Text>
               <Text style={styles.meta}>Email: {item.email || user?.email || '-'}</Text>
               <Text style={styles.meta}>ID: {item.username || item.employeeCode || userId(user) || '-'}</Text>
+              <Text style={styles.meta}>Cycle: {item.cycle?.startDate || '-'} to {item.cycle?.endDate || '-'}</Text>
             </View>
             <View style={styles.amountBox}>
               <Text style={styles.amountLabel}>{item.salaryLabel || 'Amount'}</Text>
               <Text style={styles.amount}>{formatCurrency(item.amount || 0)}</Text>
             </View>
+          </View>
+          <View style={styles.attendanceBox}>
+            <Text style={styles.attendanceTitle}>Recent Attendance</Text>
+            {recentAttendance(item).map(day => (
+              <View key={`${cycleKey(item)}-${day.date}`} style={styles.attendanceRow}>
+                <View style={styles.flex}>
+                  <Text style={styles.attendanceDate}>{day.date}</Text>
+                  <Text style={styles.meta}>{day.day || '-'} / {day.timeStatus || '-'}</Text>
+                </View>
+                <StatusPill value={day.status || '-'} />
+                <Text style={styles.dayPay}>{day.payableDays || 0} day</Text>
+              </View>
+            ))}
+            {!recentAttendance(item).length ? <Text style={styles.meta}>No attendance details in this cycle.</Text> : null}
           </View>
         </Card>
       ))}
@@ -151,5 +182,10 @@ const styles = StyleSheet.create({
   amountBox: {alignItems: 'flex-end', backgroundColor: colors.surfaceMuted, borderRadius: 8, minWidth: 130, padding: spacing.md},
   amountLabel: {color: colors.textMuted, fontSize: 11, fontWeight: '900'},
   amount: {color: colors.success, fontSize: 18, fontWeight: '900', marginTop: spacing.xs},
+  attendanceBox: {backgroundColor: colors.surfaceMuted, borderRadius: 8, gap: spacing.xs, marginTop: spacing.md, padding: spacing.md},
+  attendanceTitle: {color: colors.text, fontSize: 14, fontWeight: '900'},
+  attendanceRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
+  attendanceDate: {color: colors.text, fontWeight: '900'},
+  dayPay: {color: colors.primary, fontSize: 12, fontWeight: '900'},
   error: {color: colors.danger},
 });
