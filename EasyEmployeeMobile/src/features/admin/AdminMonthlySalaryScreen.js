@@ -9,6 +9,7 @@ import {
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
@@ -20,9 +21,31 @@ const idOf = item => String(item?.id || item?._id || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
 const monthKey = item => `${item.year}-${String(item.month).padStart(2, '0')}`;
 
-const previousMonthParts = today => {
-  const date = new Date(today.year, today.month - 2, 1);
-  return {month: date.getMonth() + 1, year: date.getFullYear()};
+const toBase64 = data => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  const encode = binary => {
+    let output = '';
+    for (let index = 0; index < binary.length; index += 3) {
+      const chr1 = binary.charCodeAt(index);
+      const chr2 = binary.charCodeAt(index + 1);
+      const chr3 = binary.charCodeAt(index + 2);
+      const enc1 = chr1 >> 2;
+      const enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+      const enc3 = Number.isNaN(chr2) ? 64 : ((chr2 & 15) << 2) | (chr3 >> 6);
+      const enc4 = Number.isNaN(chr3) ? 64 : chr3 & 63;
+      output += alphabet.charAt(enc1) + alphabet.charAt(enc2) + alphabet.charAt(enc3) + alphabet.charAt(enc4);
+    }
+    return output;
+  };
+  if (typeof data === 'string') {
+    return global.btoa ? global.btoa(data) : encode(data);
+  }
+  const bytes = new Uint8Array(data);
+  let binary = '';
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+  return global.btoa ? global.btoa(binary) : encode(binary);
 };
 
 const parseJoiningDate = employee => {
@@ -91,16 +114,17 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
   const exportPayroll = async () => {
     setLoading(true);
     try {
-      const pastMonth = previousMonthParts(today);
-      const csv = await exportAdminMonthlySalaries({
-        month: pastMonth.month,
-        year: pastMonth.year,
+      const file = await exportAdminMonthlySalaries({
+        pastCycle: true,
+        format: 'xlsx',
       });
+      const base64 = toBase64(file);
       await Share.share({
-        title: `bank-salary-sheet-${pastMonth.month}-${pastMonth.year}.csv`,
-        message: String(csv || ''),
+        title: 'bank-salary-upload.xlsx',
+        url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`,
+        message: 'Bank salary upload XLSX generated from master payroll cycle rules.',
       });
-      setToast('Past month bank salary sheet is ready to share.');
+      setToast('Past cycle bank salary XLSX is ready to share.');
     } catch (err) {
       setToast(err.message || 'Salary export could not be prepared.');
     } finally {
@@ -186,8 +210,14 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { load(); loadPayroll(); }} />}>
       <ToastBanner message={toast} type={toast.includes('success') ? 'success' : 'error'} onHide={() => setToast('')} />
 
+      <PageHeader
+        eyebrow="Payroll command"
+        title="Monthly Salaries"
+        subtitle="Cycle-aware salary, deductions, bank details, and export control for HR."
+      />
+
       <Card>
-        <Text style={styles.title}>Monthly Salaries</Text>
+        <Text style={styles.title}>Salary Cycle Controls</Text>
         <AppTextInput label="Search by name, email, employee ID, code, or letter" value={search} onChangeText={setSearch} />
         <View style={styles.twoCol}>
           <AppTextInput label="Month" keyboardType="numeric" value={payrollMonth} onChangeText={value => setPayrollMonth(value.replace(/[^0-9]/g, ''))} style={styles.flex} />

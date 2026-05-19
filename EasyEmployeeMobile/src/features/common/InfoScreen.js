@@ -3,6 +3,7 @@ import {StyleSheet, Text, View} from 'react-native';
 import {Mail, Phone} from 'lucide-react-native';
 import {getCompanySettings} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -28,9 +29,13 @@ export const InfoScreen = ({route}) => {
 
   return (
     <Screen>
+      <PageHeader
+        eyebrow={kind === 'settings' ? 'Contact us' : 'Information'}
+        title={title}
+        subtitle={kind === 'settings' ? 'Official company support email and phone for employees and leaders.' : body}
+      />
       <Card>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.body}>{body}</Text>
+        {kind !== 'settings' ? <Text style={styles.body}>{body}</Text> : null}
         {kind === 'settings' ? (
           <View style={styles.help}>
             <View style={styles.row}>

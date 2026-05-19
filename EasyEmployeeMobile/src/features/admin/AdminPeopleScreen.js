@@ -9,6 +9,7 @@ import {
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {ToastBanner} from '../../components/ToastBanner';
@@ -95,8 +96,14 @@ export const AdminPeopleScreen = ({navigation}) => {
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <ToastBanner message={toast} type={toast.includes('success') || toast.includes('activated') ? 'success' : 'error'} onHide={() => setToast('')} />
 
+      <PageHeader
+        eyebrow="People operations"
+        title="Employees"
+        subtitle="Clean employee, leader, bank, tax, team, and employment records in one structured view."
+      />
+
       <Card>
-        <Text style={styles.title}>Employees</Text>
+        <Text style={styles.title}>Directory Filters</Text>
         <View style={styles.roleTabs}>
           {roleOptions.map(option => (
             <AppButton

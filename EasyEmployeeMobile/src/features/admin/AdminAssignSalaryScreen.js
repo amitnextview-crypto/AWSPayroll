@@ -12,6 +12,7 @@ import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {FilterChips} from '../../components/FilterChips';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
@@ -252,6 +253,11 @@ export const AdminAssignSalaryScreen = ({navigation, route}) => {
   return (
     <Screen>
       <ToastBanner message={toast} onHide={() => setToast('')} />
+      <PageHeader
+        eyebrow="Compensation"
+        title={selectedSalary ? 'Edit Salary' : 'Assign Salary'}
+        subtitle="Gross, net, statutory deductions, TDS, and employer contributions stay wired together."
+      />
       <Card>
         <Text style={styles.title}>{selectedSalary ? 'Edit Salary Structure' : 'Assign Salary Structure'}</Text>
         <View style={styles.actions}>

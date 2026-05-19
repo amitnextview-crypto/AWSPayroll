@@ -13,6 +13,7 @@ import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {FilterChips} from '../../components/FilterChips';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
@@ -369,8 +370,14 @@ export const AdminAttendanceScreen = ({route}) => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { loadEmployees(); loadAttendance(); }} />}>
+      <PageHeader
+        eyebrow="Workforce control"
+        title="Attendance"
+        subtitle="Cycle-based attendance review with absences, leaves, weekly offs, and HR corrections."
+      />
+
       <Card>
-        <Text style={styles.title}>Attendance</Text>
+        <Text style={styles.title}>Attendance Filters</Text>
         <AppTextInput label="Search employee by name, email, ID, code, or letter" value={search} onChangeText={setSearch} />
         <View style={styles.twoCol}>
           <AppTextInput label="Month" keyboardType="numeric" value={monthFilter} onChangeText={value => setMonthFilter(value.replace(/[^0-9]/g, ''))} style={styles.flex} />

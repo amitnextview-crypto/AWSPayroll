@@ -13,6 +13,7 @@ const userService = require('../services/user-service');
 const UserDto = require('../dtos/user-dto');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const PDFDocument = require('pdfkit');
 const teamService = require('../services/team-service');
 const attendanceService = require('../services/attendance-service');
 const payrollPolicyService = require('../services/payrollPolicyService');
@@ -87,6 +88,221 @@ const monthYearPairsForRange = (start, end) => {
   }
   return pairs;
 };
+
+const escapeXml = value =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+const columnName = index => {
+  let name = '';
+  let current = index + 1;
+  while (current > 0) {
+    const modulo = (current - 1) % 26;
+    name = String.fromCharCode(65 + modulo) + name;
+    current = Math.floor((current - modulo) / 26);
+  }
+  return name;
+};
+
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let crc = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  return crc >>> 0;
+});
+
+const crc32 = buffer => {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+};
+
+const dosDateTime = date => {
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { dosTime, dosDate };
+};
+
+const createZip = files => {
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  const { dosTime, dosDate } = dosDateTime(new Date());
+
+  files.forEach(file => {
+    const nameBuffer = Buffer.from(file.name);
+    const dataBuffer = Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data);
+    const crc = crc32(dataBuffer);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt16LE(dosTime, 10);
+    local.writeUInt16LE(dosDate, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(dataBuffer.length, 18);
+    local.writeUInt32LE(dataBuffer.length, 22);
+    local.writeUInt16LE(nameBuffer.length, 26);
+    local.writeUInt16LE(0, 28);
+    parts.push(local, nameBuffer, dataBuffer);
+
+    const header = Buffer.alloc(46);
+    header.writeUInt32LE(0x02014b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(20, 6);
+    header.writeUInt16LE(0, 8);
+    header.writeUInt16LE(0, 10);
+    header.writeUInt16LE(dosTime, 12);
+    header.writeUInt16LE(dosDate, 14);
+    header.writeUInt32LE(crc, 16);
+    header.writeUInt32LE(dataBuffer.length, 20);
+    header.writeUInt32LE(dataBuffer.length, 24);
+    header.writeUInt16LE(nameBuffer.length, 28);
+    header.writeUInt16LE(0, 30);
+    header.writeUInt16LE(0, 32);
+    header.writeUInt16LE(0, 34);
+    header.writeUInt16LE(0, 36);
+    header.writeUInt32LE(0, 38);
+    header.writeUInt32LE(offset, 42);
+    central.push(header, nameBuffer);
+    offset += local.length + nameBuffer.length + dataBuffer.length;
+  });
+
+  const centralSize = central.reduce((sum, item) => sum + item.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(offset, 16);
+  end.writeUInt16LE(0, 20);
+  return Buffer.concat([...parts, ...central, end]);
+};
+
+const buildXlsx = rows => {
+  const sheetRows = rows.map((row, rowIndex) => {
+    const cells = row.map((value, columnIndex) => {
+      const ref = `${columnName(columnIndex)}${rowIndex + 1}`;
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return `<c r="${ref}"><v>${value}</v></c>`;
+      }
+      return `<c r="${ref}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
+    }).join('');
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join('');
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`;
+  const workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Bank Salary Upload" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  const workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
+  const rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>';
+  return createZip([
+    { name: '[Content_Types].xml', data: contentTypes },
+    { name: '_rels/.rels', data: rootRels },
+    { name: 'xl/workbook.xml', data: workbook },
+    { name: 'xl/_rels/workbook.xml.rels', data: workbookRels },
+    { name: 'xl/worksheets/sheet1.xml', data: sheet },
+  ]);
+};
+
+const buildBankSalaryRows = payload => [
+  [
+    'Employee Name',
+    'Email',
+    'Employee ID',
+    'Employee Code',
+    'PAN',
+    'Bank Name',
+    'Account Number',
+    'IFSC Code',
+    'Cycle Start',
+    'Cycle End',
+    'Salary Month',
+    'Salary Year',
+    'Monthly Gross',
+    'Assigned Net Salary',
+    'Per Day Salary',
+    'Payable Days',
+    'Present Days',
+    'Half Days',
+    'Leave Days',
+    'Absent Days',
+    'Approved Expenses',
+    'PF Employee',
+    'ESI Employee',
+    'Professional Tax',
+    'Loan Recovery',
+    'TDS Monthly',
+    'Total Deductions',
+    'Final Salary Paid',
+  ],
+  ...(payload.data || []).map(item => [
+    item.name,
+    item.email,
+    item.username || String(item.employeeID),
+    item.employeeCode || '',
+    item.panNumber || '',
+    item.bankName || '',
+    item.accountNumber || '',
+    item.ifscCode || '',
+    item.cycle?.startDate,
+    item.cycle?.fullEndDate || item.cycle?.endDate,
+    item.month,
+    item.year,
+    item.assignedGross || item.earnings?.gross || 0,
+    item.assignedNetPay || 0,
+    item.perDaySalary || 0,
+    item.payableDays || 0,
+    item.presentDays || 0,
+    item.halfDays || 0,
+    item.leaveDays || 0,
+    item.absentDays || 0,
+    item.totalExpenses || 0,
+    item.deductions?.pfEmployee || 0,
+    item.deductions?.esiEmployee || 0,
+    item.deductions?.professionalTax || 0,
+    item.deductions?.loanRecovery || 0,
+    item.deductions?.tdsMonthly || 0,
+    item.deductions?.totalDeductions || 0,
+    item.totalPay || 0,
+  ]),
+];
+
+const buildSalaryPdf = (payload, rows) => new Promise(resolve => {
+  const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' });
+  const chunks = [];
+  doc.on('data', chunk => chunks.push(chunk));
+  doc.on('end', () => resolve(Buffer.concat(chunks)));
+  doc.fontSize(16).text('Bank Salary Upload', { align: 'center' });
+  doc.moveDown(0.4);
+  doc.fontSize(9).text(`Cycle: ${payload.cycle?.startDate || '-'} to ${payload.cycle?.fullEndDate || payload.cycle?.endDate || '-'}`);
+  doc.text(`Employees: ${(payload.data || []).length}`);
+  doc.moveDown(0.8);
+  rows.slice(0, 1).concat(rows.slice(1)).forEach((row, index) => {
+    const line = [
+      row[0],
+      row[2],
+      row[5],
+      row[6],
+      row[7],
+      row[12],
+      row[26],
+      row[27],
+    ].map(value => String(value ?? '')).join(' | ');
+    doc.font(index === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(index === 0 ? 8 : 7).text(line, { continued: false });
+    if (doc.y > 520) doc.addPage();
+  });
+  doc.end();
+});
 
 const parseTimeToMinutes = value => {
   const text = String(value || '').trim();
@@ -846,6 +1062,7 @@ class UserController {
         email: user.email,
         username: user.username,
         employeeCode: user.employeeCode,
+        panNumber: user.panNumber,
         bankName: user.bankName,
         accountNumber: user.accountNumber,
         ifscCode: user.ifscCode,
@@ -988,6 +1205,15 @@ class UserController {
   }
 
   exportMonthlySalariesCsv = async (req, res) => {
+    if (String(req.query.pastCycle || '').toLowerCase() === 'true') {
+      const today = normalizeDateOnly(new Date());
+      const currentCycle = await getPayrollCycleSettings(today.getFullYear(), today.getMonth() + 1);
+      const exportDate = today > currentCycle.endDate
+        ? currentCycle.endDate
+        : new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      req.query.month = exportDate.getMonth() + 1;
+      req.query.year = exportDate.getFullYear();
+    }
     const originalJson = res.json.bind(res);
     let payload = null;
     res.json = data => {
@@ -999,40 +1225,23 @@ class UserController {
     if (!payload?.success) {
       return res.status(500).json(payload || { success: false, message: 'Export failed' });
     }
-    const rows = [
-      [
-        'Employee Name',
-        'Email',
-        'Employee ID',
-        'Bank Name',
-        'Account Number',
-        'IFSC Code',
-        'Cycle Start',
-        'Cycle End',
-        'Salary Month',
-        'Salary Year',
-        'Amount',
-      ],
-      ...payload.data.map(item => [
-        item.name,
-        item.email,
-        item.username || item.employeeCode || String(item.employeeID),
-        item.bankName || '',
-        item.accountNumber || '',
-        item.ifscCode || '',
-        item.cycle?.startDate,
-        item.cycle?.fullEndDate || item.cycle?.endDate,
-        item.month,
-        item.year,
-        item.totalPay,
-      ]),
-    ];
-    const csv = rows
-      .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="bank-salary-sheet-${req.query.month || new Date().getMonth() + 1}-${req.query.year || new Date().getFullYear()}.csv"`);
-    return res.send(csv);
+    const rows = buildBankSalaryRows(payload);
+    const cycleStart = payload.cycle?.startDate || `${req.query.year}-${String(req.query.month).padStart(2, '0')}`;
+    const cycleEnd = payload.cycle?.fullEndDate || payload.cycle?.endDate || cycleStart;
+    const format = String(req.query.format || 'xlsx').toLowerCase();
+    const filenameBase = `bank-salary-upload-${cycleStart}-to-${cycleEnd}`;
+
+    if (format === 'pdf') {
+      const pdf = await buildSalaryPdf(payload, rows);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.pdf"`);
+      return res.send(pdf);
+    }
+
+    const xlsx = buildXlsx(rows);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.xlsx"`);
+    return res.send(xlsx);
   }
 
 

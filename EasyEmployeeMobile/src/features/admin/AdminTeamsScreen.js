@@ -14,6 +14,7 @@ import {
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
@@ -114,6 +115,11 @@ export const AdminTeamsScreen = () => {
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <ToastBanner message={toast} type={toast.includes('success') ? 'success' : 'error'} onHide={() => setToast('')} />
+      <PageHeader
+        eyebrow="Team structure"
+        title="Teams"
+        subtitle="Leader assignment, member mapping, and team roster maintenance in one place."
+      />
       {teams.map(team => {
         const teamId = team.id || team._id;
         const teamMembers = members[teamId] || [];

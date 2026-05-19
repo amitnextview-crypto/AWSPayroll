@@ -4,6 +4,7 @@ import {UsersRound} from 'lucide-react-native';
 import {useSelector} from 'react-redux';
 import {getEmployeeTeam, getEmployeeTeamMembers} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -43,6 +44,11 @@ export const EmployeeTeamsScreen = () => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      <PageHeader
+        eyebrow="Team"
+        title="My Team"
+        subtitle="Leader and member details for your current team assignment."
+      />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {team ? (
         <Card>

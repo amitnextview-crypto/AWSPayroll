@@ -36,7 +36,11 @@ export const AppButton = ({
       onPress={onPress}
       style={({pressed}) => [
         styles.button,
-        {backgroundColor, opacity: disabled || loading ? 0.55 : pressed ? 0.88 : 1},
+        {
+          backgroundColor,
+          borderColor: isMuted ? colors.border : backgroundColor,
+          opacity: disabled || loading ? 0.55 : pressed ? 0.88 : 1,
+        },
         !isMuted && styles.raised,
       ]}>
       {loading ? (
@@ -61,13 +65,14 @@ const styles = StyleSheet.create({
   button: {
     minHeight: 48,
     borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
   raised: {
     elevation: 2,
-    shadowColor: '#183b88',
+    shadowColor: '#4b351c',
     shadowOffset: {width: 0, height: 5},
     shadowOpacity: 0.16,
     shadowRadius: 10,
@@ -79,6 +84,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

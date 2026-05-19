@@ -4,6 +4,7 @@ import {useSelector} from 'react-redux';
 import {getSalary} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -57,8 +58,13 @@ export const SalaryScreen = () => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      <PageHeader
+        eyebrow="Compensation"
+        title="Salary Details"
+        subtitle="Assigned earnings, deductions, and net pay structure."
+      />
       <Card>
-        <Text style={styles.title}>Salary Details</Text>
+        <Text style={styles.title}>Net Pay</Text>
         <Text style={styles.subtitle}>{month || '-'} / {year || '-'} | Assigned {assignedDate || '-'}</Text>
         <Text style={styles.netPay}>{formatCurrency(netPay)}</Text>
         <Text style={styles.subtitle}>Net pay</Text>

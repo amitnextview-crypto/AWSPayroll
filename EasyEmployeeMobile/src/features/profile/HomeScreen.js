@@ -5,6 +5,7 @@ import {BriefcaseBusiness, CalendarCheck, ClipboardList, IndianRupee, MapPin, Re
 import {getAttendance, getEmployeeExpenses, getLeaveApplications, getMyMonthlySalaries} from '../../api/employeeApi';
 import {Card} from '../../components/Card';
 import {MetricCard} from '../../components/MetricCard';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -75,11 +76,11 @@ export const HomeScreen = ({navigation}) => {
 
   return (
     <Screen>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Target Management</Text>
-        <Text style={styles.greeting}>Hi, {user?.name || user?.username}</Text>
-        <Text style={styles.sub}>Dashboard</Text>
-      </View>
+      <PageHeader
+        eyebrow="Employee workspace"
+        title={`Hi, ${user?.name || user?.username}`}
+        subtitle="Attendance, salary, leave, expenses, and profile data connected to payroll."
+      />
 
       <View style={styles.grid}>
         <MetricCard icon={CalendarCheck} label="Today Attendance" value={summary.attendanceStatus} tone="success" />

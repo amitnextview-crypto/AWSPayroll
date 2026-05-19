@@ -1,12 +1,18 @@
 import React from 'react';
 import {Building2, CalendarCheck, ClipboardList, FileText, IndianRupee, LayoutDashboard, ReceiptText, Settings} from 'lucide-react-native';
 import {MenuGrid} from '../../components/MenuGrid';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 
 export const EmployeeMenuScreen = ({navigation}) => {
   const openInfo = (title, body, kind) => navigation.navigate('Info', {title, body, kind});
   return (
     <Screen>
+      <PageHeader
+        eyebrow="Employee suite"
+        title="Menu"
+        subtitle="Open attendance, salary, leave, expenses, team, settings, and policies."
+      />
       <MenuGrid
         items={[
           {label: 'Dashboard', caption: 'Profile and quick status', icon: LayoutDashboard, onPress: () => navigation.navigate('Home')},

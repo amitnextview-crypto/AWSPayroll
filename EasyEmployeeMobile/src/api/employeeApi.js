@@ -80,7 +80,7 @@ export const generateAdminMonthlySalaries = data =>
 export const calculateCurrentMonthSalaries = params =>
   client.get('/admin/calculate-current-month-salaries', {params});
 export const exportAdminMonthlySalaries = params =>
-  client.get('/admin/monthly-salaries/export', {params, responseType: 'text'});
+  client.get('/admin/monthly-salaries/export', {params, responseType: 'arraybuffer'});
 export const sendAdminPayslip = data => client.post('/admin/payslip/send-email', data);
 export const getSalaryTaxRules = () => client.get('/admin/salary-tax-rules');
 export const addSalaryTaxRule = data => client.post('/admin/salary-tax-rules', data);

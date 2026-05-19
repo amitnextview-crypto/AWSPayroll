@@ -5,7 +5,7 @@ import {useSelector} from 'react-redux';
 import {getThemeColors} from '../theme/colors';
 import {spacing} from '../theme/spacing';
 
-const accents = ['#2457c5', '#0b7f86', '#b98215', '#7c3aed', '#16885f', '#c43d2f'];
+const accents = ['#8a6432', '#236f73', '#b27a22', '#5c6f38', '#1f7a5a', '#b6423c'];
 
 export const MenuGrid = ({items}) => {
   const themeMode = useSelector(state => state.ui.themeMode);
@@ -20,7 +20,7 @@ export const MenuGrid = ({items}) => {
           key={item.label}
           onPress={item.onPress}
           style={({pressed}) => [styles.item, {backgroundColor: colors.surface, borderColor: colors.border}, pressed && styles.pressed]}>
-          <View style={[styles.iconBox, {backgroundColor: `${accent}18`}]}>{Icon ? <Icon color={accent} size={20} /> : null}</View>
+          <View style={[styles.iconBox, {backgroundColor: `${accent}1f`, borderColor: `${accent}55`}]}>{Icon ? <Icon color={accent} size={20} /> : null}</View>
           <View style={styles.textWrap}>
             <Text style={[styles.label, {color: colors.text}]}>{item.label}</Text>
             {item.caption ? <Text style={[styles.caption, {color: colors.textMuted}]}>{item.caption}</Text> : null}
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     minHeight: 68,
     padding: spacing.md,
-    shadowColor: '#24406f',
+    shadowColor: '#2a2116',
     shadowOffset: {width: 0, height: 6},
     shadowOpacity: 0.08,
     shadowRadius: 14,
@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
   },
   iconBox: {
     alignItems: 'center',
+    borderWidth: 1,
     borderRadius: 8,
     height: 42,
     justifyContent: 'center',

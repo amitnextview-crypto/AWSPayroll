@@ -7,6 +7,7 @@ import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {FilterChips} from '../../components/FilterChips';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {ToastBanner} from '../../components/ToastBanner';
 import {setTheme} from '../../store/uiSlice';
@@ -71,10 +72,11 @@ export const AdminSettingsScreen = () => {
   return (
     <Screen>
       <ToastBanner message={toast} type="success" onHide={() => setToast('')} />
-      <Card>
-        <Text style={[styles.title, {color: colors.text}]}>Settings</Text>
-        <Text style={[styles.meta, {color: colors.textMuted}]}>Theme, notifications, security, company and system preferences</Text>
-      </Card>
+      <PageHeader
+        eyebrow="Control room"
+        title="Settings"
+        subtitle="Theme, help contact, alerts, security, company and system preferences."
+      />
 
       <Card>
         <Text style={[styles.section, {color: colors.text}]}>Theme</Text>

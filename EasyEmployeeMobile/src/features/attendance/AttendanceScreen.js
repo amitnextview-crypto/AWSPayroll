@@ -7,6 +7,7 @@ import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
 import {FilterChips} from '../../components/FilterChips';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {getEmployeePayrollPolicies} from '../../api/employeeApi';
@@ -290,6 +291,11 @@ export const AttendanceScreen = () => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}>
+      <PageHeader
+        eyebrow="Attendance"
+        title="Daily Check-in"
+        subtitle="GPS check-in, checkout, weekly offs, and cycle attendance history."
+      />
       <Card>
         <View style={styles.summary}>
           <Text style={styles.summaryLabel}>This salary cycle</Text>

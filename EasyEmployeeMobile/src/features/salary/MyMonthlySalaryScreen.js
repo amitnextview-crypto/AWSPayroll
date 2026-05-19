@@ -7,6 +7,7 @@ import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
 import {Card} from '../../components/Card';
 import {EmptyState} from '../../components/EmptyState';
+import {PageHeader} from '../../components/PageHeader';
 import {Screen} from '../../components/Screen';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
@@ -77,8 +78,13 @@ export const MyMonthlySalaryScreen = () => {
 
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      <PageHeader
+        eyebrow="Payroll cycle"
+        title="My Monthly Salaries"
+        subtitle="Month-wise payable salary calculated from attendance, leave, expenses, and salary rules."
+      />
       <Card>
-        <Text style={styles.title}>My Monthly Salaries</Text>
+        <Text style={styles.title}>Search Salary Records</Text>
         <View style={styles.twoCol}>
           <AppTextInput
             keyboardType="numeric"

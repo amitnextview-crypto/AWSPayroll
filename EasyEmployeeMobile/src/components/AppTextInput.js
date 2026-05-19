@@ -16,7 +16,7 @@ export const AppTextInput = ({label, error, style, secureTextEntry, ...props}) =
       <View
         style={[
           styles.inputShell,
-          {backgroundColor: colors.surface, borderColor: colors.border},
+          {backgroundColor: colors.panel || colors.surface, borderColor: colors.border},
           error && {borderColor: colors.danger},
         ]}>
         <TextInput
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   inputShell: {
     alignItems: 'center',
