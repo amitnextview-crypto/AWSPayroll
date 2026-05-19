@@ -834,11 +834,7 @@ class UserController {
       effectiveEndDate = today;
     }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
-    const payableCycleDays = cycleDates.filter(dateObj => {
-      const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-      return !cycle.weeklyOffDays.includes(day);
-    }).length;
-    const shouldPayWeeklyOff = cycle.openDaysInMonth > payableCycleDays;
+    const shouldPayWeeklyOff = cycle.openDaysInMonth >= 30;
     const cycleStartIso = formatIsoDate(cycle.startDate);
     const cycleEndIso = formatIsoDate(effectiveEndDate);
     const fullCycleEndIso = formatIsoDate(cycle.endDate);
@@ -949,6 +945,46 @@ class UserController {
         })
     ));
 
+    if (shouldPayWeeklyOff) {
+      const weeklyOffDates = cycleDates.filter(dateObj => {
+        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        return cycle.weeklyOffDays.includes(day);
+      });
+      await Promise.all(users.flatMap(user =>
+        weeklyOffDates.map(async dateObj => {
+          const employeeId = String(user._id);
+          const dayNumber = dateObj.getDate();
+          const dateYear = dateObj.getFullYear();
+          const dateMonth = dateObj.getMonth() + 1;
+          const isoDate = formatIsoDate(dateObj);
+          const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+          const key = `${employeeId}-${isoDate}`;
+          const saved = await Attendance.findOneAndUpdate(
+            { employeeID: user._id, year: dateYear, month: dateMonth, date: dayNumber },
+            {
+              $set: {
+                employeeID: user._id,
+                year: dateYear,
+                month: dateMonth,
+                date: dayNumber,
+                day,
+                present: true,
+                status: 'Present',
+                attendanceIn: 'Auto Weekly Off',
+                attendanceOut: 'Auto Weekly Off',
+                late: 'No',
+                totalHours: '0',
+                timeStatus: 'Full Time',
+                reason: `${day} auto-present because fixed paid days is ${cycle.openDaysInMonth}`,
+              },
+            },
+            { upsert: true, new: true },
+          );
+          attendanceByEmployeeDate.set(key, saved);
+        })
+      ));
+    }
+
     const results = users.map(user => {
       const employeeId = String(user._id);
       const empSalary = salaryByEmployee.get(employeeId);
@@ -1007,11 +1043,11 @@ class UserController {
           presentDays += 1;
           holidayPaidDays += 1;
         } else if (isWeeklyOff) {
-          status = 'Weekly Off';
-          timeStatus = 'Weekly Off';
+          status = shouldPayWeeklyOff ? 'Present' : 'Weekly Off';
+          timeStatus = shouldPayWeeklyOff ? 'Full Time' : 'Weekly Off';
           dayValue = shouldPayWeeklyOff ? 1 : 0;
           reason = shouldPayWeeklyOff
-            ? `${day} weekly off paid by fixed paid days master rule`
+            ? `${day} auto-present because fixed paid days is ${cycle.openDaysInMonth}`
             : `${day} weekly off by master salary rule`;
           weeklyOffDays += 1;
           if (shouldPayWeeklyOff) {
@@ -1054,9 +1090,9 @@ class UserController {
           status,
           timeStatus,
           reason: record?.reason || reason,
-          attendanceIn: record?.attendanceIn || '-',
-          attendanceOut: record?.attendanceOut || '-',
-          totalHours: totalHours || record?.totalHours || '-',
+          attendanceIn: record?.attendanceIn || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
+          attendanceOut: record?.attendanceOut || (shouldPayWeeklyOff && isWeeklyOff ? 'Auto Weekly Off' : '-'),
+          totalHours: totalHours || record?.totalHours || (shouldPayWeeklyOff && isWeeklyOff ? '0' : '-'),
           payableDays: dayValue,
         };
       });
@@ -1090,7 +1126,7 @@ class UserController {
           fullEndDate: fullCycleEndIso,
           openDaysInMonth: cycle.openDaysInMonth,
           salaryBasis: shouldPayWeeklyOff
-            ? `${cycle.salaryBasis}; weekly off paid because fixed paid days exceed working days`
+            ? `${cycle.salaryBasis}; weekly off auto-present because fixed paid days is ${cycle.openDaysInMonth}`
             : cycle.salaryBasis,
           salaryCycleStartDay: cycle.startDay,
           salaryCycleEndDay: cycle.endDay,
@@ -1135,7 +1171,7 @@ class UserController {
         fullEndDate: fullCycleEndIso,
         openDaysInMonth: cycle.openDaysInMonth,
         salaryBasis: shouldPayWeeklyOff
-          ? `${cycle.salaryBasis}; weekly off paid because fixed paid days exceed working days`
+          ? `${cycle.salaryBasis}; weekly off auto-present because fixed paid days is ${cycle.openDaysInMonth}`
           : cycle.salaryBasis,
         salaryCycleStartDay: cycle.startDay,
         salaryCycleEndDay: cycle.endDay,
