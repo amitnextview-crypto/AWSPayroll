@@ -25,6 +25,13 @@ const roleOptions = [
 const roleOf = user => String(user?.type || '').toLowerCase();
 const isWorkforce = user => ['employee', 'leader'].includes(roleOf(user));
 
+const InfoPill = ({label, value}) => (
+  <View style={styles.infoPill}>
+    <Text style={styles.infoLabel}>{label}</Text>
+    <Text style={styles.infoValue}>{value || '-'}</Text>
+  </View>
+);
+
 export const AdminPeopleScreen = ({navigation}) => {
   const [items, setItems] = useState([]);
   const [searchDraft, setSearchDraft] = useState('');
@@ -130,27 +137,31 @@ export const AdminPeopleScreen = ({navigation}) => {
             <StatusPill value={item.status || '-'} />
           </View>
           <View style={styles.details}>
-            <Text style={styles.meta}>Role: {item.type || '-'}</Text>
+            <View style={styles.infoGrid}>
+              <InfoPill label="Role" value={item.type} />
+              <InfoPill label="Employee ID" value={item.username} />
+              <InfoPill label="Code" value={item.employeeCode} />
+              <InfoPill label="Mobile" value={item.mobile} />
+            </View>
             <Text style={styles.meta}>Email: {item.email || '-'}</Text>
-            <Text style={styles.meta}>Mobile: {item.mobile || '-'}</Text>
-            <Text style={styles.meta}>Employee ID: {item.username || '-'}</Text>
-            <Text style={styles.meta}>Code: {item.employeeCode || '-'}</Text>
             {expandedId === (item.id || item._id) ? (
-              <>
-                <Text style={styles.meta}>Department: {item.department || '-'}</Text>
-                <Text style={styles.meta}>Designation: {item.designation || '-'}</Text>
-                <Text style={styles.meta}>Work Type: {item.workType || '-'}</Text>
-                <Text style={styles.meta}>Joining: {item.date || '-'}</Text>
-                <Text style={styles.meta}>Team: {item.team?.name || '-'}</Text>
-                <Text style={styles.meta}>PAN: {item.panNumber || '-'}</Text>
-                <Text style={styles.meta}>Aadhaar: {item.aadhaarNumber || '-'}</Text>
-                <Text style={styles.meta}>Bank: {item.bankName || '-'}</Text>
-                <Text style={styles.meta}>Account: {item.accountNumber || '-'}</Text>
-                <Text style={styles.meta}>IFSC: {item.ifscCode || '-'}</Text>
-                <Text style={styles.meta}>UAN: {item.uan || '-'}</Text>
-                <Text style={styles.meta}>ESI: {item.esi || '-'}</Text>
+              <View style={styles.detailPanel}>
+                <View style={styles.infoGrid}>
+                  <InfoPill label="Department" value={item.department} />
+                  <InfoPill label="Designation" value={item.designation} />
+                  <InfoPill label="Work Type" value={item.workType} />
+                  <InfoPill label="Joining" value={item.date} />
+                  <InfoPill label="Team" value={item.team?.name} />
+                  <InfoPill label="PAN" value={item.panNumber} />
+                  <InfoPill label="Aadhaar" value={item.aadhaarNumber} />
+                  <InfoPill label="Bank" value={item.bankName} />
+                  <InfoPill label="Account" value={item.accountNumber} />
+                  <InfoPill label="IFSC" value={item.ifscCode} />
+                  <InfoPill label="UAN" value={item.uan} />
+                  <InfoPill label="ESI" value={item.esi} />
+                </View>
                 <Text style={styles.meta}>Address: {item.address || '-'}</Text>
-              </>
+              </View>
             ) : null}
           </View>
           <View style={styles.actions}>
@@ -178,6 +189,19 @@ const styles = StyleSheet.create({
   name: {color: colors.text, flex: 1, fontSize: 18, fontWeight: '900'},
   meta: {color: colors.textMuted, lineHeight: 20},
   details: {gap: spacing.xs, marginTop: spacing.sm},
+  infoGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs},
+  infoPill: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    padding: spacing.sm,
+  },
+  infoLabel: {color: colors.textMuted, fontSize: 11, fontWeight: '900'},
+  infoValue: {color: colors.text, fontSize: 13, fontWeight: '900', marginTop: spacing.xs},
+  detailPanel: {backgroundColor: colors.surfaceMuted, borderRadius: 8, marginTop: spacing.sm, padding: spacing.sm},
   count: {color: colors.textMuted, fontWeight: '800'},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
   roleTabs: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md},

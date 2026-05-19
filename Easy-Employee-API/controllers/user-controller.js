@@ -469,6 +469,37 @@ const getPayrollCycleSettings = async (year, month) => {
   };
 };
 
+const addDays = (date, days) => {
+  const next = normalizeDateOnly(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const nextMonthParts = (year, month) => {
+  const next = new Date(year, month, 1);
+  return { year: next.getFullYear(), month: next.getMonth() + 1 };
+};
+
+const resolveSalaryCycleRequest = async (requestedYear, requestedMonth, today) => {
+  const requestedCycle = await getPayrollCycleSettings(requestedYear, requestedMonth);
+  const currentCalendarCycle = await getPayrollCycleSettings(today.getFullYear(), today.getMonth() + 1);
+  const finalDisplayDate = addDays(currentCalendarCycle.endDate, 1);
+  const isCurrentCalendarRequest =
+    requestedYear === today.getFullYear() &&
+    requestedMonth === today.getMonth() + 1;
+
+  if (isCurrentCalendarRequest && today > finalDisplayDate) {
+    const next = nextMonthParts(requestedYear, requestedMonth);
+    return {
+      year: next.year,
+      month: next.month,
+      cycle: await getPayrollCycleSettings(next.year, next.month),
+    };
+  }
+
+  return { year: requestedYear, month: requestedMonth, cycle: requestedCycle };
+};
+
 const getAttendanceCycleSettings = async (year, month) => {
   const salaryCycle = await getPayrollCycleSettings(year, month);
   const startDate = new Date(
@@ -823,14 +854,17 @@ class UserController {
   calculateCurrentMonthSalaries = async (req, res) => {
   try {
     const currentDate = new Date();
-    const year = Number(req.query.year || currentDate.getFullYear());
-    const month = Number(req.query.month || currentDate.getMonth() + 1);
     const today = normalizeDateOnly(currentDate);
-    const cycle = await getPayrollCycleSettings(year, month);
+    const requestedYear = Number(req.query.year || currentDate.getFullYear());
+    const requestedMonth = Number(req.query.month || currentDate.getMonth() + 1);
+    const resolved = await resolveSalaryCycleRequest(requestedYear, requestedMonth, today);
+    const year = resolved.year;
+    const month = resolved.month;
+    const cycle = resolved.cycle;
     let effectiveEndDate = cycle.endDate;
     if (today < cycle.startDate) {
       effectiveEndDate = cycle.startDate;
-    } else if (cycle.endDate > today) {
+    } else if (today <= cycle.endDate && cycle.endDate > today) {
       effectiveEndDate = today;
     }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
@@ -838,7 +872,8 @@ class UserController {
     const cycleStartIso = formatIsoDate(cycle.startDate);
     const cycleEndIso = formatIsoDate(effectiveEndDate);
     const fullCycleEndIso = formatIsoDate(cycle.endDate);
-    const isFinalSalary = today >= cycle.endDate;
+    const finalDisplayDate = addDays(cycle.endDate, 1);
+    const isFinalSalary = today >= finalDisplayDate;
     const salaryLabel = isFinalSalary ? 'Final Salary' : 'Salary Till Date';
     const attendanceRangeQuery = monthYearPairsForRange(cycle.startDate, effectiveEndDate);
     const requestedEmployeeID = req.query.employeeID && mongoose.Types.ObjectId.isValid(req.query.employeeID)
@@ -1224,11 +1259,16 @@ class UserController {
 
     const employee = await User.findById(employeeID);
     const currentDate = new Date();
+    const today = normalizeDateOnly(currentDate);
+    const currentCycle = await getPayrollCycleSettings(currentDate.getFullYear(), currentDate.getMonth() + 1);
+    const currentCursorParts = today > addDays(currentCycle.endDate, 1)
+      ? nextMonthParts(currentDate.getFullYear(), currentDate.getMonth() + 1)
+      : { month: currentDate.getMonth() + 1, year: currentDate.getFullYear() };
     const joiningDate = new Date(employee?.date || employee?.createdAt || currentDate);
     const start = Number.isNaN(joiningDate.getTime())
       ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       : new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1);
-    const cursor = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const cursor = new Date(currentCursorParts.year, currentCursorParts.month - 1, 1);
     const months = [];
 
     while (cursor >= start) {

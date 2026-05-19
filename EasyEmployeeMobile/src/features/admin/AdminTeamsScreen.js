@@ -1,15 +1,11 @@
 import React, {useEffect, useState} from 'react';
-import {Alert, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {ShieldCheck, Trash2, UserMinus, UserPlus} from 'lucide-react-native';
+import {Alert, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Edit3, Trash2, UserPlus, X} from 'lucide-react-native';
 import {
-  addAdminTeamMember,
-  changeAdminTeamLeader,
   deleteAdminTeam,
-  getAdminEmployees,
   getAdminTeamMembers,
   getAdminTeams,
-  removeAdminTeamLeader,
-  removeAdminTeamMember,
+  updateAdminTeam,
 } from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {AppTextInput} from '../../components/AppTextInput';
@@ -20,12 +16,13 @@ import {ToastBanner} from '../../components/ToastBanner';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
 
-export const AdminTeamsScreen = () => {
+const idOf = item => String(item?.id || item?._id || '');
+
+export const AdminTeamsScreen = ({navigation}) => {
   const [teams, setTeams] = useState([]);
   const [members, setMembers] = useState({});
-  const [employees, setEmployees] = useState([]);
-  const [selectedEmployees, setSelectedEmployees] = useState({});
-  const [searchByTeam, setSearchByTeam] = useState({});
+  const [editingId, setEditingId] = useState('');
+  const [editForm, setEditForm] = useState({name: '', description: ''});
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -33,20 +30,17 @@ export const AdminTeamsScreen = () => {
     setLoading(true);
     setToast('');
     try {
-      const [teamResponse, employeeResponse] = await Promise.all([
-        getAdminTeams(),
-        getAdminEmployees({limit: 100}),
-      ]);
+      const teamResponse = await getAdminTeams();
       const nextTeams = teamResponse?.data || teamResponse?.teams || [];
       setTeams(nextTeams);
-      setEmployees(employeeResponse?.data || []);
       const memberPairs = await Promise.all(
         nextTeams.map(async team => {
           try {
-            const response = await getAdminTeamMembers(team.id || team._id);
-            return [team.id || team._id, response?.data || []];
+            const teamId = idOf(team);
+            const response = await getAdminTeamMembers(teamId);
+            return [teamId, response?.data || []];
           } catch {
-            return [team.id || team._id, []];
+            return [idOf(team), []];
           }
         }),
       );
@@ -62,54 +56,56 @@ export const AdminTeamsScreen = () => {
     load();
   }, []);
 
-  const toggleForTeam = (teamId, userId) => {
-    setSelectedEmployees(current => {
-      const existing = current[teamId] || [];
-      return {
-        ...current,
-        [teamId]: existing.includes(userId)
-          ? existing.filter(id => id !== userId)
-          : [...existing, userId],
-      };
+  const startEdit = team => {
+    setEditingId(idOf(team));
+    setEditForm({
+      name: team.name || '',
+      description: team.description || '',
     });
   };
 
-  const setTeamSearch = (teamId, value) => setSearchByTeam(current => ({...current, [teamId]: value}));
-
-  const confirmDelete = team => {
-    Alert.alert('Delete team', `Delete ${team?.name || 'this team'}?`, [
-      {text: 'Cancel', style: 'cancel'},
-      {text: 'Delete', style: 'destructive', onPress: async () => {
-        try {
-          await deleteAdminTeam(team.id || team._id);
-          setToast('Team deleted successfully.');
-          load();
-        } catch (err) {
-          setToast(err.message || 'Team could not be deleted.');
-        }
-      }},
-    ]);
-  };
-
-  const runTeamAction = async (team, action, multi = false) => {
-    const teamId = team.id || team._id;
-    const ids = selectedEmployees[teamId] || [];
-    if (!ids.length) {
-      setToast('Select at least one employee first.');
+  const saveEdit = async team => {
+    if (!editForm.name.trim()) {
+      setToast('Team name is required.');
       return;
     }
+    setLoading(true);
+    setToast('');
     try {
-      if (multi) {
-        await Promise.all(ids.map(userId => action({teamId, userId})));
-      } else {
-        await action({teamId, userId: ids[0]});
-      }
+      await updateAdminTeam(idOf(team), {
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+      });
+      setEditingId('');
       setToast('Team updated successfully.');
-      setSelectedEmployees(current => ({...current, [teamId]: []}));
-      load();
+      await load();
     } catch (err) {
       setToast(err.message || 'Team could not be updated.');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const confirmDelete = team => {
+    Alert.alert('Delete team', `Delete ${team?.name || 'this team'}? Assigned people will become available again.`, [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            await deleteAdminTeam(idOf(team));
+            setToast('Team deleted successfully.');
+            await load();
+          } catch (err) {
+            setToast(err.message || 'Team could not be deleted.');
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -118,97 +114,76 @@ export const AdminTeamsScreen = () => {
       <PageHeader
         eyebrow="Team structure"
         title="Teams"
-        subtitle="Leader assignment, member mapping, and team roster maintenance in one place."
+        subtitle="Created teams appear here with their leader, employees, edit, and delete controls."
       />
+      <Card>
+        <View style={styles.headingRow}>
+          <View style={styles.fill}>
+            <Text style={styles.title}>Team List</Text>
+            <Text style={styles.meta}>{teams.length} team(s) created</Text>
+          </View>
+          <AppButton icon={UserPlus} title="Add Team" onPress={() => navigation?.navigate?.('AdminAddTeam')} />
+        </View>
+      </Card>
+
       {teams.map(team => {
-        const teamId = team.id || team._id;
+        const teamId = idOf(team);
         const teamMembers = members[teamId] || [];
-        const selected = selectedEmployees[teamId] || [];
-        const lower = (searchByTeam[teamId] || '').toLowerCase();
-        const filteredEmployees = employees.filter(employee => {
-          const text = `${employee.name || ''} ${employee.email || ''} ${employee.username || ''} ${employee.employeeCode || ''} ${employee.id || employee._id || ''} ${employee.department || ''} ${employee.designation || ''}`.toLowerCase();
-          return text.includes(lower);
-        });
+        const leaderId = idOf(team.leader);
+        const employeeMembers = teamMembers.filter(member => idOf(member) !== leaderId);
+        const editing = editingId === teamId;
         return (
           <Card key={teamId}>
-            <View style={styles.row}>
-              <View style={styles.fill}>
-                <Text style={styles.title}>{team.name || '-'}</Text>
-                <Text style={styles.meta}>{team.description || '-'}</Text>
-                <Text style={styles.meta}>Leader: {team.leader?.name || '-'}</Text>
-                <Text style={styles.meta}>Members: {teamMembers.length}</Text>
-              </View>
-              <AppButton icon={Trash2} onPress={() => confirmDelete(team)} title="Delete" variant="danger" />
-            </View>
-            <Text style={styles.label}>Search and Select Employees</Text>
-            <AppTextInput
-              label="Search employee, code, department"
-              value={searchByTeam[teamId] || ''}
-              onChangeText={value => setTeamSearch(teamId, value)}
-            />
-            <View style={styles.employeeGrid}>
-              {filteredEmployees.slice(0, 30).map(employee => {
-                const id = employee.id || employee._id;
-                const active = selected.includes(id);
-                return (
-                  <Text
-                    key={id}
-                    onPress={() => toggleForTeam(teamId, id)}
-                    style={[styles.employeeChip, active && styles.employeeChipActive]}>
-                    {employee.name || employee.username}
-                  </Text>
-                );
-              })}
-            </View>
-            <Text style={styles.meta}>
-              Selected: {selected.length} / Showing {Math.min(filteredEmployees.length, 30)} of {filteredEmployees.length}
-            </Text>
-            <View style={styles.actions}>
-              <AppButton icon={ShieldCheck} title="Set First as Leader" variant="muted" onPress={() => runTeamAction(team, changeAdminTeamLeader)} />
-              <AppButton icon={UserPlus} title="Add Selected" variant="muted" onPress={() => runTeamAction(team, addAdminTeamMember, true)} />
-              <AppButton icon={UserMinus} title="Remove Selected" variant="muted" onPress={() => runTeamAction(team, removeAdminTeamMember, true)} />
-              {team.leader?.id || team.leader?._id ? (
-                <AppButton icon={UserMinus} title="Remove Leader" variant="danger" onPress={() => removeAdminTeamLeader({teamId, userId: team.leader.id || team.leader._id}).then(load).catch(err => setToast(err.message))} />
-              ) : null}
-            </View>
-            {teamMembers.map(member => (
-              <Text key={member.id || member._id} style={styles.member}>
-                {member.name || member.username} - {member.designation || 'Employee'}
-              </Text>
-            ))}
+            {editing ? (
+              <>
+                <Text style={styles.title}>Edit Team</Text>
+                <AppTextInput label="Team name" value={editForm.name} onChangeText={name => setEditForm(current => ({...current, name}))} />
+                <AppTextInput label="Description" value={editForm.description} onChangeText={description => setEditForm(current => ({...current, description}))} multiline />
+                <View style={styles.actions}>
+                  <AppButton icon={Edit3} title="Save" loading={loading} onPress={() => saveEdit(team)} />
+                  <AppButton icon={X} title="Cancel" variant="muted" onPress={() => setEditingId('')} />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.headingRow}>
+                  <View style={styles.fill}>
+                    <Text style={styles.title}>{team.name || '-'}</Text>
+                    <Text style={styles.meta}>{team.description || '-'}</Text>
+                    <Text style={styles.meta}>Leader: {team.leader?.name || '-'}</Text>
+                    <Text style={styles.meta}>Employees: {employeeMembers.length}</Text>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <AppButton icon={Edit3} title="Edit" variant="muted" onPress={() => startEdit(team)} />
+                    <AppButton icon={Trash2} title="Delete" variant="danger" onPress={() => confirmDelete(team)} />
+                  </View>
+                </View>
+                <ScrollView nestedScrollEnabled style={styles.memberList}>
+                  {employeeMembers.map(member => (
+                    <Text key={idOf(member)} style={styles.member}>
+                      {member.name || member.username} - {member.designation || 'Employee'}
+                    </Text>
+                  ))}
+                </ScrollView>
+                {!employeeMembers.length ? <Text style={styles.empty}>No employees assigned.</Text> : null}
+              </>
+            )}
           </Card>
         );
       })}
-      {!loading && !teams.length ? <Text style={styles.empty}>No teams found.</Text> : null}
+      {!loading && !teams.length ? <Text style={styles.empty}>No teams found. Create one from Add Team.</Text> : null}
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  row: {alignItems: 'center', flexDirection: 'row', gap: spacing.md},
+  headingRow: {alignItems: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, justifyContent: 'space-between'},
   fill: {flex: 1},
-  title: {color: colors.text, fontSize: 17, fontWeight: '900'},
+  title: {color: colors.text, fontSize: 18, fontWeight: '900', marginBottom: spacing.xs},
   meta: {color: colors.textMuted, marginTop: spacing.xs},
-  label: {color: colors.text, fontSize: 13, fontWeight: '800', marginTop: spacing.md},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
-  employeeGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
-  employeeChip: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: 1,
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '800',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  employeeChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    color: colors.surface,
-  },
-  member: {color: colors.textMuted, marginTop: spacing.xs},
+  cardActions: {gap: spacing.sm},
+  memberList: {maxHeight: 160, marginTop: spacing.sm},
+  member: {borderBottomColor: colors.border, borderBottomWidth: 1, color: colors.textMuted, paddingVertical: spacing.xs},
   empty: {color: colors.textMuted, textAlign: 'center'},
 });

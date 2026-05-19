@@ -146,7 +146,9 @@ export const AdminAddUserScreen = ({route, navigation}) => {
           <AppTextInput label="Phone" keyboardType="phone-pad" error={showErrors ? errors.mobile : undefined} value={form.mobile} onChangeText={value => set('mobile', value)} style={styles.flex} />
           <AppTextInput label={isEdit ? 'New Password (optional)' : 'Password'} secureTextEntry error={showErrors ? errors.password : undefined} value={form.password} onChangeText={value => set('password', value)} style={styles.flex} />
         </View>
-        <FilterChips items={roleOptions} value={form.type} onChange={value => set('type', value)} />
+        <View style={styles.chipGroup}>
+          <FilterChips items={roleOptions} value={form.type} onChange={value => set('type', value)} />
+        </View>
 
         <Text style={styles.section}>Job Details</Text>
         <View style={styles.twoCol}>
@@ -154,7 +156,9 @@ export const AdminAddUserScreen = ({route, navigation}) => {
           <AppTextInput label="Designation" error={showErrors ? errors.designation : undefined} value={form.designation} onChangeText={value => set('designation', value)} style={styles.flex} />
         </View>
         <AppTextInput label="Joining Date YYYY-MM-DD" value={form.date} onChangeText={value => set('date', value)} />
-        <FilterChips items={workOptions} value={form.workType} onChange={value => set('workType', value)} />
+        <View style={styles.chipGroup}>
+          <FilterChips items={workOptions} value={form.workType} onChange={value => set('workType', value)} />
+        </View>
         <AppTextInput label="Address" multiline value={form.address} onChangeText={value => set('address', value)} />
 
         <Text style={styles.section}>Bank and Compliance</Text>
@@ -192,5 +196,6 @@ const styles = StyleSheet.create({
   section: {color: colors.primary, fontSize: 14, fontWeight: '900', marginTop: spacing.lg},
   twoCol: {flexDirection: 'row', gap: spacing.md},
   flex: {flex: 1},
+  chipGroup: {marginTop: spacing.sm, marginBottom: spacing.sm},
   submitWrap: {marginTop: spacing.md},
 });

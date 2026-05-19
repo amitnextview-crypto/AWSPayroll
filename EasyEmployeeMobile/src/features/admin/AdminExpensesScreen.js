@@ -1,9 +1,10 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {RefreshControl, StyleSheet, Text, View} from 'react-native';
 import {Check, X} from 'lucide-react-native';
 import {getAdminAllUsers, getAdminExpenses, updateAdminExpense} from '../../api/employeeApi';
 import {AppButton} from '../../components/AppButton';
 import {Card} from '../../components/Card';
+import {FilterChips} from '../../components/FilterChips';
 import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
@@ -12,10 +13,17 @@ import {formatCurrency} from '../../utils/money';
 
 const idOf = item => String(item?.id || item?._id || item || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
+const statusItems = [
+  {label: 'All', value: 'all'},
+  {label: 'Pending', value: 'Pending'},
+  {label: 'Approved', value: 'Approved'},
+  {label: 'Rejected', value: 'Rejected'},
+];
 
 export const AdminExpensesScreen = () => {
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
+  const [status, setStatus] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,10 +61,22 @@ export const AdminExpensesScreen = () => {
     }
   };
 
+  const visibleItems = useMemo(() => {
+    if (status === 'all') return items;
+    return items.filter(item => String(item.adminResponse || 'Pending') === status);
+  }, [items, status]);
+
   return (
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      <Card>
+        <Text style={styles.title}>Expense Requests</Text>
+        <View style={styles.chipGroup}>
+          <FilterChips items={statusItems} value={status} onChange={setStatus} />
+        </View>
+        <Text style={styles.meta}>{visibleItems.length} records</Text>
+      </Card>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {items.map(item => {
+      {visibleItems.map(item => {
         const user = userFor(item);
         return (
           <Card key={item.id || item._id}>
@@ -80,7 +100,7 @@ export const AdminExpensesScreen = () => {
           </Card>
         );
       })}
-      {!loading && !items.length ? <Text style={styles.empty}>No expenses found.</Text> : null}
+      {!loading && !visibleItems.length ? <Text style={styles.empty}>No expenses found.</Text> : null}
     </Screen>
   );
 };
@@ -91,6 +111,7 @@ const styles = StyleSheet.create({
   meta: {color: colors.textMuted, marginTop: spacing.xs},
   status: {color: colors.primary, fontWeight: '800', marginTop: spacing.sm},
   actions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},
+  chipGroup: {marginTop: spacing.sm},
   error: {color: colors.danger},
   empty: {color: colors.textMuted, textAlign: 'center'},
 });

@@ -4,7 +4,7 @@ class TeamService{
 
     createTeam = async team => await TeamModel.create(team);
 
-    deleteTeam = async _id => await TeamModel.deleteOne({_id});
+    deleteTeam = async filter => await TeamModel.findOneAndDelete(filter);
 
     findTeams = async filter => await TeamModel.find(filter).populate('leader')
 

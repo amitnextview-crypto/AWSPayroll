@@ -10,6 +10,8 @@ class UserService {
 
   updateUser = async (_id, user) => await UserModel.updateOne({ _id }, user);
 
+  updateMany = async (filter, data) => await UserModel.updateMany(filter, data);
+
   findCount = async (filter) => await UserModel.find(filter).countDocuments();
 
   findUser = async (filter) => await UserModel.findOne(filter);

@@ -109,6 +109,13 @@ const normalizeTimeInput = value => {
   return `${String(hour).padStart(2, '0')}:${minute} ${meridian}`;
 };
 
+const DetailTile = ({label, value, tone}) => (
+  <View style={[styles.detailTile, tone === 'danger' ? styles.detailTileDanger : tone === 'success' ? styles.detailTileSuccess : null]}>
+    <Text style={[styles.detailLabel, tone ? styles.detailLabelTone : null]}>{label}</Text>
+    <Text style={[styles.detailValue, tone ? styles.detailValueTone : null]}>{value || '-'}</Text>
+  </View>
+);
+
 export const AdminAttendanceScreen = ({route}) => {
   const today = useMemo(() => todayParts(), []);
   const [employees, setEmployees] = useState([]);
@@ -228,8 +235,12 @@ export const AdminAttendanceScreen = ({route}) => {
       const record = recordByDate.get(`${rowYear}-${rowMonth}-${date}`);
       const day = dayNames[new Date(rowYear, rowMonth - 1, date).getDay()];
       const isWeeklyOff = weeklyOffDays.includes(day.toLowerCase());
+      const isAutoWeeklyOff = isWeeklyOff && (
+        record?.attendanceIn === 'Auto Weekly Off' ||
+        String(record?.reason || '').toLowerCase().includes('auto-present')
+      );
       const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, rowYear, rowMonth, date);
-      const status = isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
+      const status = isAutoWeeklyOff ? record?.status || 'Present' : isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
       rows.push({
         key: `${rowYear}-${rowMonth}-${date}`,
         id: record?._id || record?.id || '',
@@ -241,10 +252,10 @@ export const AdminAttendanceScreen = ({route}) => {
         date,
         day: record?.day || day,
         status,
-        attendanceIn: isWeeklyOff ? '-' : record?.attendanceIn || '-',
-        attendanceOut: isWeeklyOff ? '-' : record?.attendanceOut || '-',
-        late: isWeeklyOff ? '-' : record?.late || '-',
-        totalHours: isWeeklyOff ? '-' : record?.totalHours || '-',
+        attendanceIn: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.attendanceIn || '-',
+        attendanceOut: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.attendanceOut || '-',
+        late: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.late || '-',
+        totalHours: isWeeklyOff && !isAutoWeeklyOff ? '-' : record?.totalHours || '-',
         timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : status === 'Weekly Off' ? 'Weekly Off' : '-'),
         reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, rowYear, rowMonth, date)),
       });
@@ -294,6 +305,12 @@ export const AdminAttendanceScreen = ({route}) => {
         };
       });
   }, [employees, today, todayLeaves, todayRecords, weeklyOffDays]);
+
+  const todayPresentCount = useMemo(() => {
+    const todayDay = dayNames[new Date(today.year, today.month - 1, today.date).getDay()];
+    if (weeklyOffDays.includes(todayDay.toLowerCase())) return 0;
+    return Math.max(employees.length - todayAbsentRows.length, 0);
+  }, [employees.length, today, todayAbsentRows.length, weeklyOffDays]);
 
   const startEdit = row => {
     if (row.status === 'Weekly Off') {
@@ -376,24 +393,16 @@ export const AdminAttendanceScreen = ({route}) => {
         subtitle="Cycle-based attendance review with absences, leaves, weekly offs, and HR corrections."
       />
 
-      <Card>
-        <Text style={styles.title}>Attendance Filters</Text>
-        <AppTextInput label="Search employee by name, email, ID, code, or letter" value={search} onChangeText={setSearch} />
-        <View style={styles.twoCol}>
-          <AppTextInput label="Month" keyboardType="numeric" value={monthFilter} onChangeText={value => setMonthFilter(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
-          <AppTextInput label="Year" keyboardType="numeric" value={yearFilter} onChangeText={value => setYearFilter(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
-        </View>
-        <AppTextInput
-          label="Filter by date number"
-          placeholder="Example: 1, 8, 16, 31"
-          keyboardType="numeric"
-          value={dateFilter}
-          onChangeText={value => setDateFilter(value.replace(/[^0-9]/g, ''))}
-        />
-        <Text style={styles.meta}>Employees and leaders: {employees.length}</Text>
-      </Card>
-
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <Card>
+        <Text style={styles.title}>Today Workforce</Text>
+        <View style={styles.statGrid}>
+          <DetailTile label="Total Employees" value={String(employees.length)} />
+          <DetailTile label="Present" value={String(todayPresentCount)} tone="success" />
+          <DetailTile label="Absent" value={String(todayAbsentRows.length)} tone="danger" />
+        </View>
+      </Card>
 
       <Card>
         <Text style={styles.section}>Absent Today</Text>
@@ -440,6 +449,23 @@ export const AdminAttendanceScreen = ({route}) => {
       </Card>
 
       <Card>
+        <Text style={styles.title}>Attendance Filters</Text>
+        <AppTextInput label="Search employee by name, email, ID, code, or letter" value={search} onChangeText={setSearch} />
+        <View style={styles.twoCol}>
+          <AppTextInput label="Month" keyboardType="numeric" value={monthFilter} onChangeText={value => setMonthFilter(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+          <AppTextInput label="Year" keyboardType="numeric" value={yearFilter} onChangeText={value => setYearFilter(value.replace(/[^0-9]/g, ''))} style={styles.flex} />
+        </View>
+        <AppTextInput
+          label="Filter by date number"
+          placeholder="Example: 1, 8, 16, 31"
+          keyboardType="numeric"
+          value={dateFilter}
+          onChangeText={value => setDateFilter(value.replace(/[^0-9]/g, ''))}
+        />
+        <Text style={styles.meta}>Employees and leaders: {employees.length}</Text>
+      </Card>
+
+      <Card>
         <Text style={styles.section}>Select Employee</Text>
         <ScrollView nestedScrollEnabled style={styles.employeeList}>
           {filteredEmployees.map(employee => {
@@ -473,17 +499,16 @@ export const AdminAttendanceScreen = ({route}) => {
             <Text style={styles.name}>{row.name}</Text>
             <StatusPill value={row.status} />
           </View>
-          <Text style={styles.meta}>Name: {row.name}</Text>
-          <Text style={styles.meta}>Email: {row.email}</Text>
-          <Text style={styles.meta}>Date: {displayDate(row.year, row.month, row.date)}</Text>
-          <Text style={styles.meta}>Day: {row.day}</Text>
-          <Text style={styles.meta}>Status: {row.status}</Text>
-          <Text style={styles.meta}>In Time: {row.attendanceIn}</Text>
-          <Text style={styles.meta}>Out Time: {row.attendanceOut}</Text>
-          <Text style={styles.meta}>Late: {row.late}</Text>
-          <Text style={styles.meta}>Total Hours: {row.totalHours}</Text>
-          <Text style={styles.meta}>Time Status: {row.timeStatus}</Text>
-          <Text style={styles.meta}>Reason: {row.reason || '-'}</Text>
+          <View style={styles.attendanceGrid}>
+            <DetailTile label="Date" value={displayDate(row.year, row.month, row.date)} />
+            <DetailTile label="Day" value={row.day} />
+            <DetailTile label="In" value={row.attendanceIn} />
+            <DetailTile label="Out" value={row.attendanceOut} />
+            <DetailTile label="Late" value={row.late} />
+            <DetailTile label="Hours" value={row.totalHours} />
+            <DetailTile label="Time Status" value={row.timeStatus} />
+            <DetailTile label="Reason" value={row.reason || '-'} />
+          </View>
           {editingKey === row.key ? (
             <View style={styles.editBox}>
               <Text style={styles.inputLabel}>Status</Text>
@@ -530,6 +555,23 @@ const styles = StyleSheet.create({
   inlineEdit: {gap: spacing.sm, marginTop: spacing.sm},
   employeeRow: {alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.sm},
   editBox: {gap: spacing.sm, marginTop: spacing.md},
+  statGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
+  attendanceGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md},
+  detailTile: {
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    padding: spacing.sm,
+  },
+  detailTileSuccess: {backgroundColor: colors.success, borderColor: colors.success},
+  detailTileDanger: {backgroundColor: colors.danger, borderColor: colors.danger},
+  detailLabel: {color: colors.textMuted, fontSize: 11, fontWeight: '900'},
+  detailValue: {color: colors.text, fontSize: 13, fontWeight: '900', marginTop: spacing.xs},
+  detailLabelTone: {color: colors.surface},
+  detailValueTone: {color: colors.surface},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},
   error: {color: colors.danger},
   empty: {color: colors.textMuted, textAlign: 'center'},

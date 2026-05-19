@@ -11,13 +11,25 @@ class TeamController {
     {
         const profile = req.file && req.file.filename;
         const {name,description,leader} =req.body;
+        const members = Array.isArray(req.body.members) ? req.body.members : [];
         if(!name) return next(ErrorHandler.badRequest('Required Parameter Teams Name Is Empty'))
         if(leader && !mongoose.Types.ObjectId.isValid(leader)) return next(ErrorHandler.badRequest('Invalid Leader Id'));
+        if (members.some(memberId => !mongoose.Types.ObjectId.isValid(memberId))) {
+            return next(ErrorHandler.badRequest('Invalid Employee Id'));
+        }
+        const uniqueMembers = [...new Set(members.map(String))].filter(memberId => memberId !== String(leader || ''));
         if (leader) {
             const selectedLeader = await userService.findUser({_id: leader});
             if (!selectedLeader) return next(ErrorHandler.notFound('Selected leader not found'));
+            if (selectedLeader.team) return next(ErrorHandler.badRequest(`${selectedLeader.name} already in a team`));
             const alreadyLeading = await teamService.findTeam({leader});
             if (alreadyLeading) return next(ErrorHandler.badRequest(`${selectedLeader.name} is already leading ${alreadyLeading.name}`));
+        }
+        if (uniqueMembers.length) {
+            const selectedMembers = await userService.findUsers({_id: {$in: uniqueMembers}});
+            if (selectedMembers.length !== uniqueMembers.length) return next(ErrorHandler.notFound('One or more selected employees were not found'));
+            const unavailable = selectedMembers.find(user => user.team || user.type !== 'employee');
+            if (unavailable) return next(ErrorHandler.badRequest(`${unavailable.name} is not available for team assignment`));
         }
         const team = {
             name,
@@ -30,6 +42,9 @@ class TeamController {
         if (leader) {
             await userService.updateUser(leader, { type: 'leader', team: teamResp._id });
         }
+        if (uniqueMembers.length) {
+            await Promise.all(uniqueMembers.map(memberId => userService.updateUser(memberId, { team: teamResp._id })));
+        }
         res.json({success:true,message:'Team Has Been Created',team:new TeamDto(teamResp)});
     }
 
@@ -38,19 +53,40 @@ class TeamController {
         const {id} = req.params;
         if(!id) return next(ErrorHandler.badRequest('Team Id Is Missing'));
         if(!mongoose.Types.ObjectId.isValid(id)) return next(ErrorHandler.badRequest('Invalid Team Id'));
+        const existingTeam = await teamService.findTeam({_id:id});
+        if(!existingTeam) return next(ErrorHandler.notFound('No Team Found'));
         let {name,description,status,leader} =req.body;
         const profile = req.file && req.file.filename;
         status = status && status.toLowerCase();
         if(leader && !mongoose.Types.ObjectId.isValid(leader)) return next(ErrorHandler.badRequest('Invalid Leader Id'));
-        const team = {
-            name,
-            description,
-            status,
-            profile,
-            leader
+        const team = {};
+        if (name !== undefined) team.name = name;
+        if (description !== undefined) team.description = description;
+        if (status !== undefined) team.status = status;
+        if (profile !== undefined) team.profile = profile;
+        if (leader !== undefined) {
+            if (leader) {
+                const selectedLeader = await userService.findUser({_id: leader});
+                if (!selectedLeader) return next(ErrorHandler.notFound('Selected leader not found'));
+                const alreadyLeading = await teamService.findTeam({leader});
+                if (alreadyLeading && String(alreadyLeading._id) !== String(id)) {
+                    return next(ErrorHandler.badRequest(`${selectedLeader.name} is already leading ${alreadyLeading.name}`));
+                }
+                if (selectedLeader.team && String(selectedLeader.team._id || selectedLeader.team) !== String(id)) {
+                    return next(ErrorHandler.badRequest(`${selectedLeader.name} already in a team`));
+                }
+            }
+            team.leader = leader || null;
         }
         const teamResp = await teamService.updateTeam(id,team);
-        return (teamResp.modifiedCount!=1) ? next(ErrorHandler.serverError('Failed To Update Team')) : res.json({success:true,message:'Team Updated'})
+        if (leader !== undefined) {
+            const previousLeaderId = existingTeam.leader && (existingTeam.leader._id || existingTeam.leader);
+            if (previousLeaderId && String(previousLeaderId) !== String(leader || '')) {
+                await userService.updateUser(previousLeaderId, { type: 'employee', team: null });
+            }
+            if (leader) await userService.updateUser(leader, { type: 'leader', team: id });
+        }
+        return (teamResp.modifiedCount!=1 && teamResp.matchedCount!=1) ? next(ErrorHandler.serverError('Failed To Update Team')) : res.json({success:true,message:'Team Updated'})
     }
 
     deleteTeam = async (req,res,next) =>
@@ -66,6 +102,7 @@ class TeamController {
             console.log("Deleted team result:", deletedTeam);
             if (!deletedTeam)
               return next(ErrorHandler.notFound('Team not found or already deleted'));
+            await userService.updateMany({ team: id }, { team: null, type: 'employee' });
             res.json({ success: true, message: 'Team deleted successfully' });
           } catch (error) {
             console.error("Delete team error:", error);

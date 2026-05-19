@@ -127,7 +127,9 @@ export const AdminSalaryScreen = ({navigation}) => {
           <AppButton icon={Plus} title="Assign" onPress={() => navigation.navigate('AdminAssignSalary')} />
         </View>
         <AppTextInput label="Search by name, email, employee ID, or code" value={search} onChangeText={setSearch} />
-        <FilterChips items={statusItems} value={status} onChange={setStatus} />
+        <View style={styles.chipGroup}>
+          <FilterChips items={statusItems} value={status} onChange={setStatus} />
+        </View>
         <Text style={styles.count}>{rows.length} records</Text>
       </Card>
 
@@ -189,5 +191,6 @@ const styles = StyleSheet.create({
   summaryValue: {color: colors.text, fontWeight: '900'},
   net: {color: colors.text, fontSize: 17, fontWeight: '900', marginTop: spacing.md},
   actions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},
+  chipGroup: {marginTop: spacing.sm},
   empty: {color: colors.textMuted, textAlign: 'center'},
 });

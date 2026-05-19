@@ -50,6 +50,7 @@ export const updateAdminUser = (id, data) => client.patch(`/admin/user/${id}`, d
 export const getAdminTeamMembers = id => client.get(`/admin/team/${id}/members`);
 export const addAdminUser = data => client.post('/admin/user', data);
 export const addAdminTeam = data => client.post('/admin/team', data);
+export const updateAdminTeam = (id, data) => client.patch(`/admin/team/${id}`, data);
 export const deleteAdminUser = id => client.delete(`/admin/user/${id}`);
 export const deleteAdminTeam = id => client.delete(`/admin/team/${id}`);
 export const addAdminTeamMember = data => client.patch('/admin/team/member/add', data);

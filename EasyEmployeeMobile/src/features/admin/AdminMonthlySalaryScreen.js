@@ -104,6 +104,14 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
       });
       setPayrollRows(response?.data || []);
       setPayrollCycle(response?.cycle || null);
+      if (response?.cycle?.fullEndDate || response?.cycle?.endDate) {
+        const [, resolvedMonth] = String(response.cycle.fullEndDate || response.cycle.endDate).split('-');
+        const [resolvedYear] = String(response.cycle.fullEndDate || response.cycle.endDate).split('-');
+        if (resolvedMonth && resolvedYear) {
+          setPayrollMonth(String(Number(resolvedMonth)));
+          setPayrollYear(String(Number(resolvedYear)));
+        }
+      }
       setSelectedMonthDetail(null);
     } catch (err) {
       setToast(err.message || 'Monthly salaries could not be calculated.');
@@ -325,8 +333,8 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
                 <DetailLine label="Bank" value={`${selectedMonthlyEmployee.bankName || '-'} / ${selectedMonthlyEmployee.accountNumber || '-'} / ${selectedMonthlyEmployee.ifscCode || '-'}`} />
               </View>
               <View style={styles.summary}>
-                <Text style={styles.section}>Recent Attendance</Text>
-                {[...(selectedMonthDetail.attendanceDetails || [])].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8).map(day => (
+                <Text style={styles.section}>Cycle Attendance</Text>
+                {[...(selectedMonthDetail.attendanceDetails || [])].sort((a, b) => String(a.date).localeCompare(String(b.date))).map(day => (
                   <View key={day.date} style={styles.dayRow}>
                     <Text style={styles.dayDate}>{day.date}</Text>
                     <Text style={styles.dayStatus}>{day.status}</Text>
