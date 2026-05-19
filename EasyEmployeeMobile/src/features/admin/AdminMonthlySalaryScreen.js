@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Pressable, RefreshControl, Share, StyleSheet, Text, View} from 'react-native';
-import {Calculator, Download} from 'lucide-react-native';
+import {Alert, NativeModules, Pressable, RefreshControl, StyleSheet, Text, View} from 'react-native';
+import {Calculator, FileSpreadsheet, FileText} from 'lucide-react-native';
 import {
   calculateCurrentMonthSalaries,
   exportAdminMonthlySalaries,
@@ -20,6 +20,7 @@ import {todayParts} from '../../utils/date';
 const idOf = item => String(item?.id || item?._id || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
 const monthKey = item => `${item.year}-${String(item.month).padStart(2, '0')}`;
+const {SalaryFileModule} = NativeModules;
 
 const toBase64 = data => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
@@ -111,20 +112,24 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
     }
   };
 
-  const exportPayroll = async () => {
+  const exportPayroll = async (format = 'xlsx') => {
     setLoading(true);
     try {
+      const isPdf = format === 'pdf';
       const file = await exportAdminMonthlySalaries({
         pastCycle: true,
-        format: 'xlsx',
+        format,
       });
       const base64 = toBase64(file);
-      await Share.share({
-        title: 'bank-salary-upload.xlsx',
-        url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`,
-        message: 'Bank salary upload XLSX generated from master payroll cycle rules.',
-      });
-      setToast('Past cycle bank salary XLSX is ready to share.');
+      if (!SalaryFileModule?.saveBase64File) {
+        throw new Error('Download service is not available. Please rebuild the app.');
+      }
+      const extension = isPdf ? 'pdf' : 'xlsx';
+      const mimeType = isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const fileName = `bank-salary-upload-${Date.now()}.${extension}`;
+      const uri = await SalaryFileModule.saveBase64File(fileName, mimeType, base64);
+      setToast(`Past cycle bank salary ${extension.toUpperCase()} downloaded.`);
+      Alert.alert('Salary export downloaded', `${fileName} saved in Downloads/AWSPayroll.\n${uri || ''}`);
     } catch (err) {
       setToast(err.message || 'Salary export could not be prepared.');
     } finally {
@@ -225,7 +230,8 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
         </View>
         <View style={styles.actions}>
           <AppButton icon={Calculator} title="Search Salaries" loading={loading} onPress={loadPayroll} />
-          <AppButton icon={Download} title="Export Past Month Salary" variant="muted" loading={loading} onPress={exportPayroll} />
+          <AppButton icon={FileSpreadsheet} title="Download XLSX" variant="muted" loading={loading} onPress={() => exportPayroll('xlsx')} />
+          <AppButton icon={FileText} title="Download PDF" variant="muted" loading={loading} onPress={() => exportPayroll('pdf')} />
         </View>
         {payrollCycle ? (
           <Text style={styles.count}>
@@ -239,7 +245,7 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
         <>
           <Card>
             <Text style={styles.title}>Employees and Leaders</Text>
-            <Text style={styles.count}>Tap an employee to view month-wise salary.</Text>
+            <Text style={styles.count}>Tap an employee to view concise month-wise salary details.</Text>
           </Card>
           {visibleMonthlyEmployees.map(({employee, payroll}) => (
             <Pressable
@@ -254,6 +260,7 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
                     <Text style={styles.name}>{employee?.name || employee?.username || 'Employee'}</Text>
                     <Text style={styles.meta}>Email: {employee?.email || '-'}</Text>
                     <Text style={styles.meta}>Employee ID: {employee?.username || employee?.employeeCode || idOf(employee)}</Text>
+                    <Text style={styles.meta}>Bank: {employee?.bankName || '-'} / IFSC: {employee?.ifscCode || '-'}</Text>
                   </View>
                   <Text style={[styles.badge, payroll ? styles.assigned : styles.unassigned]}>
                     {payroll ? formatCurrency(payroll.totalPay || 0) : 'No salary'}
@@ -313,6 +320,9 @@ export const AdminMonthlySalaryScreen = ({navigation}) => {
                 <DetailLine label="Present / Leave / Half" value={`${selectedMonthDetail.presentDays || 0} / ${selectedMonthDetail.leaveDays || 0} / ${selectedMonthDetail.halfDays || 0}`} />
                 <DetailLine label="Holiday / Absent" value={`${selectedMonthDetail.holidayPaidDays || 0} / ${selectedMonthDetail.absentDays || 0}`} />
                 <DetailLine label="Approved expenses" value={formatCurrency(selectedMonthDetail.totalExpenses || 0)} />
+                <DetailLine label="Gross / Net" value={`${formatCurrency(selectedMonthDetail.assignedGross || 0)} / ${formatCurrency(selectedMonthDetail.assignedNetPay || 0)}`} />
+                <DetailLine label="Deductions" value={formatCurrency(selectedMonthDetail.deductions?.totalDeductions || 0)} />
+                <DetailLine label="Bank" value={`${selectedMonthlyEmployee.bankName || '-'} / ${selectedMonthlyEmployee.accountNumber || '-'} / ${selectedMonthlyEmployee.ifscCode || '-'}`} />
               </View>
               <View style={styles.summary}>
                 <Text style={styles.section}>Recent Attendance</Text>

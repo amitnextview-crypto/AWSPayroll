@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, RefreshControl, StyleSheet, Text, View} from 'react-native';
-import {Edit3, Power, Trash2} from 'lucide-react-native';
+import {Edit3, Eye, Power, Trash2} from 'lucide-react-native';
 import {
   deleteAdminUser,
   getAdminAllUsers,
@@ -30,6 +30,7 @@ export const AdminPeopleScreen = ({navigation}) => {
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [expandedId, setExpandedId] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -134,21 +135,31 @@ export const AdminPeopleScreen = ({navigation}) => {
             <Text style={styles.meta}>Mobile: {item.mobile || '-'}</Text>
             <Text style={styles.meta}>Employee ID: {item.username || '-'}</Text>
             <Text style={styles.meta}>Code: {item.employeeCode || '-'}</Text>
-            <Text style={styles.meta}>Department: {item.department || '-'}</Text>
-            <Text style={styles.meta}>Designation: {item.designation || '-'}</Text>
-            <Text style={styles.meta}>Work Type: {item.workType || '-'}</Text>
-            <Text style={styles.meta}>Joining: {item.date || '-'}</Text>
-            <Text style={styles.meta}>Team: {item.team?.name || '-'}</Text>
-            <Text style={styles.meta}>PAN: {item.panNumber || '-'}</Text>
-            <Text style={styles.meta}>Aadhaar: {item.aadhaarNumber || '-'}</Text>
-            <Text style={styles.meta}>Bank: {item.bankName || '-'}</Text>
-            <Text style={styles.meta}>Account: {item.accountNumber || '-'}</Text>
-            <Text style={styles.meta}>IFSC: {item.ifscCode || '-'}</Text>
-            <Text style={styles.meta}>UAN: {item.uan || '-'}</Text>
-            <Text style={styles.meta}>ESI: {item.esi || '-'}</Text>
-            <Text style={styles.meta}>Address: {item.address || '-'}</Text>
+            {expandedId === (item.id || item._id) ? (
+              <>
+                <Text style={styles.meta}>Department: {item.department || '-'}</Text>
+                <Text style={styles.meta}>Designation: {item.designation || '-'}</Text>
+                <Text style={styles.meta}>Work Type: {item.workType || '-'}</Text>
+                <Text style={styles.meta}>Joining: {item.date || '-'}</Text>
+                <Text style={styles.meta}>Team: {item.team?.name || '-'}</Text>
+                <Text style={styles.meta}>PAN: {item.panNumber || '-'}</Text>
+                <Text style={styles.meta}>Aadhaar: {item.aadhaarNumber || '-'}</Text>
+                <Text style={styles.meta}>Bank: {item.bankName || '-'}</Text>
+                <Text style={styles.meta}>Account: {item.accountNumber || '-'}</Text>
+                <Text style={styles.meta}>IFSC: {item.ifscCode || '-'}</Text>
+                <Text style={styles.meta}>UAN: {item.uan || '-'}</Text>
+                <Text style={styles.meta}>ESI: {item.esi || '-'}</Text>
+                <Text style={styles.meta}>Address: {item.address || '-'}</Text>
+              </>
+            ) : null}
           </View>
           <View style={styles.actions}>
+            <AppButton
+              icon={Eye}
+              title={expandedId === (item.id || item._id) ? 'Hide Details' : 'Details'}
+              variant="muted"
+              onPress={() => setExpandedId(current => current === (item.id || item._id) ? '' : (item.id || item._id))}
+            />
             <AppButton icon={Edit3} title="Edit" variant="muted" onPress={() => navigation.navigate('AdminAddUser', {user: item})} />
             <AppButton icon={Power} title={String(item.status).toLowerCase() === 'active' ? 'Deactivate' : 'Activate'} variant="muted" onPress={() => toggleStatus(item)} />
             <AppButton icon={Trash2} onPress={() => confirmDelete(item)} title="Delete" variant="danger" />

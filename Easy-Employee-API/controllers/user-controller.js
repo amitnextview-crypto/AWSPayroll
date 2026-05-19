@@ -834,6 +834,11 @@ class UserController {
       effectiveEndDate = today;
     }
     const cycleDates = dateRange(cycle.startDate, effectiveEndDate);
+    const payableCycleDays = cycleDates.filter(dateObj => {
+      const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      return !cycle.weeklyOffDays.includes(day);
+    }).length;
+    const shouldPayWeeklyOff = cycle.openDaysInMonth > payableCycleDays;
     const cycleStartIso = formatIsoDate(cycle.startDate);
     const cycleEndIso = formatIsoDate(effectiveEndDate);
     const fullCycleEndIso = formatIsoDate(cycle.endDate);
@@ -956,6 +961,8 @@ class UserController {
       let halfDays = 0;
       let leaveDays = 0;
       let weeklyOffDays = 0;
+      let weeklyOffPaidDays = 0;
+      let weeklyOffUnpaidDays = 0;
       let holidayPaidDays = 0;
       let absentDays = 0;
 
@@ -1002,9 +1009,17 @@ class UserController {
         } else if (isWeeklyOff) {
           status = 'Weekly Off';
           timeStatus = 'Weekly Off';
-          reason = `${day} weekly off by master salary rule`;
-          dayValue = 0;
+          dayValue = shouldPayWeeklyOff ? 1 : 0;
+          reason = shouldPayWeeklyOff
+            ? `${day} weekly off paid by fixed paid days master rule`
+            : `${day} weekly off by master salary rule`;
           weeklyOffDays += 1;
+          if (shouldPayWeeklyOff) {
+            weeklyOffPaidDays += 1;
+            presentDays += 1;
+          } else {
+            weeklyOffUnpaidDays += 1;
+          }
         } else if (record?.present) {
           totalHours = toNumber(record.totalHours) || hoursBetweenTimes(record.attendanceIn, record.attendanceOut);
           timeStatus = record.timeStatus || timeStatusFromHours(day, totalHours, record.status);
@@ -1053,7 +1068,8 @@ class UserController {
       const totalExpenses = cycle.expenseReimbursementPaid
         ? approvedExpenseItems.reduce((sum, item) => sum + toNumber(item.amount), 0)
         : 0;
-      const salaryTillDate = Number((payableDays * perDaySalary).toFixed(2));
+      const cappedPayableDays = Math.min(payableDays, cycle.openDaysInMonth);
+      const salaryTillDate = Number((cappedPayableDays * perDaySalary).toFixed(2));
       const totalPay = Number((salaryTillDate + totalExpenses).toFixed(2));
 
       return {
@@ -1073,7 +1089,9 @@ class UserController {
           endDate: cycleEndIso,
           fullEndDate: fullCycleEndIso,
           openDaysInMonth: cycle.openDaysInMonth,
-          salaryBasis: cycle.salaryBasis,
+          salaryBasis: shouldPayWeeklyOff
+            ? `${cycle.salaryBasis}; weekly off paid because fixed paid days exceed working days`
+            : cycle.salaryBasis,
           salaryCycleStartDay: cycle.startDay,
           salaryCycleEndDay: cycle.endDay,
           weeklyOffDays: cycle.weeklyOffDays,
@@ -1086,14 +1104,14 @@ class UserController {
         assignedNetPay,
         assignedGross,
         perDaySalary,
-        payableDays: Number(payableDays.toFixed(2)),
+        payableDays: Number(cappedPayableDays.toFixed(2)),
         attendancePayableDays: Number(payableDays.toFixed(2)),
         presentDays: Number(presentDays.toFixed(2)),
         halfDays,
         leaveDays,
-        sundayPaidDays: weeklyOffDays,
-        weeklyOffPaidDays: 0,
-        weeklyOffUnpaidDays: 0,
+        sundayPaidDays: weeklyOffPaidDays,
+        weeklyOffPaidDays,
+        weeklyOffUnpaidDays,
         weeklyOffDays,
         holidayPaidDays,
         absentDays,
@@ -1116,7 +1134,9 @@ class UserController {
         endDate: cycleEndIso,
         fullEndDate: fullCycleEndIso,
         openDaysInMonth: cycle.openDaysInMonth,
-        salaryBasis: cycle.salaryBasis,
+        salaryBasis: shouldPayWeeklyOff
+          ? `${cycle.salaryBasis}; weekly off paid because fixed paid days exceed working days`
+          : cycle.salaryBasis,
         salaryCycleStartDay: cycle.startDay,
         salaryCycleEndDay: cycle.endDay,
         weeklyOffDays: cycle.weeklyOffDays,
