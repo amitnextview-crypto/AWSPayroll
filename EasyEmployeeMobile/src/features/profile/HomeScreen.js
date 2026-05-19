@@ -35,7 +35,7 @@ export const HomeScreen = ({navigation}) => {
     }
     try {
       const [attendanceResult, expenseResult, leaveResult, salaryResult] = await Promise.allSettled([
-        getAttendance({employeeID: user.id, year: today.year, month: today.month}),
+        getAttendance({employeeID: user.id, year: today.year, month: today.month, date: today.date}),
         getEmployeeExpenses(),
         getLeaveApplications({applicantID: user.id}),
         getMyMonthlySalaries(),

@@ -253,6 +253,39 @@ const getPayrollCycleSettings = async (year, month) => {
   };
 };
 
+const getAttendanceCycleSettings = async (year, month) => {
+  const salaryCycle = await getPayrollCycleSettings(year, month);
+  const startDate = new Date(
+    year,
+    month - 1,
+    clampDayToMonth(year, month, salaryCycle.startDay),
+  );
+  const endMonthDate = salaryCycle.startDay <= salaryCycle.endDay
+    ? new Date(year, month - 1, 1)
+    : new Date(year, month, 1);
+  const endDate = new Date(
+    endMonthDate.getFullYear(),
+    endMonthDate.getMonth(),
+    clampDayToMonth(endMonthDate.getFullYear(), endMonthDate.getMonth() + 1, salaryCycle.endDay),
+  );
+
+  return {
+    ...salaryCycle,
+    startDate,
+    endDate,
+  };
+};
+
+const dateFromAttendanceParts = item => new Date(Number(item.year), Number(item.month) - 1, Number(item.date));
+
+const attendanceCyclePayload = cycle => ({
+  startDay: cycle.startDay,
+  endDay: cycle.endDay,
+  startDate: formatIsoDate(cycle.startDate),
+  endDate: formatIsoDate(cycle.endDate),
+  weeklyOffDays: cycle.weeklyOffDays,
+});
+
 const buildUserQuery = (query = {}, forcedType) => {
   const filter = {};
   if (forcedType) filter.type = forcedType;
@@ -1589,7 +1622,33 @@ checkOutEmployeeAttendance = async (req, res, next) => {
 
     viewEmployeeAttendance = async (req,res,next) => {
         try {
-            const data = req.body;
+            const data = req.body || {};
+            const year = Number(data.year);
+            const month = Number(data.month);
+
+            if (year && month && !data.date) {
+              const cycle = await getAttendanceCycleSettings(year, month);
+              const rangeQuery = monthYearPairsForRange(cycle.startDate, cycle.endDate);
+              const query = {
+                ...data,
+                $or: rangeQuery,
+              };
+              delete query.year;
+              delete query.month;
+
+              const records = await attendanceService.findAllAttendance(query);
+              const resp = (records || []).filter(item => {
+                const itemDate = dateFromAttendanceParts(item);
+                return itemDate >= cycle.startDate && itemDate <= cycle.endDate;
+              });
+
+              return res.json({
+                success: true,
+                data: resp,
+                cycle: attendanceCyclePayload(cycle),
+              });
+            }
+
             const resp = await attendanceService.findAllAttendance(data);
             if(!resp) return next(ErrorHandler.notFound('No Attendance found'));
 

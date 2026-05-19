@@ -19,7 +19,7 @@ import {
 } from '../../store/attendanceSlice';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
-import {todayParts, formatDisplayDate} from '../../utils/date';
+import {buildCycleDates, todayParts, formatDisplayDate} from '../../utils/date';
 
 const AttendanceItem = ({item}) => (
   <Card style={styles.item}>
@@ -60,11 +60,27 @@ const weeklyOffDaysFromPolicies = policies => {
   );
   return splitRuleList(rule?.value || 'Sunday');
 };
+const ruleNumberFromPolicies = (policies, labels, fallback) => {
+  const master = masterRuleFromPolicies(policies);
+  const normalized = labels.map(item => item.toLowerCase());
+  const rule = (master?.rules || []).find(item => normalized.includes(String(item.label || '').trim().toLowerCase()));
+  const value = Number(String(rule?.value || '').match(/\d+/)?.[0]);
+  return Number.isFinite(value) ? value : fallback;
+};
+const currentCycleStartParts = (policies, today) => {
+  const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
+  const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
+  if (startDay > endDay && today.date <= endDay) {
+    const previous = new Date(today.year, today.month - 2, 1);
+    return {year: previous.getFullYear(), month: previous.getMonth() + 1};
+  }
+  return {year: today.year, month: today.month};
+};
 
 export const AttendanceScreen = () => {
   const dispatch = useDispatch();
   const {user} = useSelector(state => state.auth);
-  const {records, loading, actionLoading, error, message} = useSelector(
+  const {records, cycle, loading, actionLoading, error, message} = useSelector(
     state => state.attendance,
   );
   const [locationState, setLocationState] = useState(null);
@@ -99,18 +115,17 @@ export const AttendanceScreen = () => {
     () => {
       const selectedMonth = Number(filters.month) || currentParts.month;
       const selectedYear = Number(filters.year) || currentParts.year;
-      const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-      const maxDay = selectedYear === currentParts.year && selectedMonth === currentParts.month ? currentParts.date : daysInMonth;
-      const recordsByDate = new Map(records.map(item => [String(item.date), item]));
+      const cycleDates = buildCycleDates(cycle, selectedYear, selectedMonth, currentParts);
+      const recordsByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
 
-      return Array.from({length: maxDay}, (_, index) => {
-        const date = index + 1;
-        const day = dayNames[new Date(selectedYear, selectedMonth - 1, date).getDay()];
-        const item = recordsByDate.get(String(date)) || {
-          _id: `absent-${selectedYear}-${selectedMonth}-${date}`,
+      return cycleDates.map(parts => {
+        const {year, month, date} = parts;
+        const day = dayNames[new Date(year, month - 1, date).getDay()];
+        const item = recordsByDate.get(`${year}-${month}-${date}`) || {
+          _id: `absent-${year}-${month}-${date}`,
           date,
-          month: selectedMonth,
-          year: selectedYear,
+          month,
+          year,
           day,
           present: false,
           status: 'Absent',
@@ -132,7 +147,7 @@ export const AttendanceScreen = () => {
           : item;
       });
     },
-    [currentParts.date, currentParts.month, currentParts.year, filters.month, filters.year, isWeeklyOffDate, records],
+    [currentParts, cycle, filters.month, filters.year, isWeeklyOffDate, records],
   );
 
   const visibleRecords = useMemo(() => {
@@ -142,25 +157,16 @@ export const AttendanceScreen = () => {
       }
       return true;
     });
-    return [...filtered].sort((a, b) => Number(b.date) - Number(a.date));
+    return [...filtered].sort((a, b) => new Date(b.year, b.month - 1, b.date) - new Date(a.year, a.month - 1, a.date));
   }, [displayRecords, filters.day, filters.mode]);
 
   const monthlyCount = useMemo(
-    () => records.filter(item => item.present && !isWeeklyOffDate(item) && String(item.status || '').toLowerCase() !== 'weekly off').length,
-    [isWeeklyOffDate, records],
+    () => displayRecords.filter(item => item.present && !isWeeklyOffDate(item) && String(item.status || '').toLowerCase() !== 'weekly off').length,
+    [displayRecords, isWeeklyOffDate],
   );
   const weeklyOffMonthCount = useMemo(() => {
-    const selectedMonth = Number(filters.month) || currentParts.month;
-    const selectedYear = Number(filters.year) || currentParts.year;
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const maxDay = selectedYear === currentParts.year && selectedMonth === currentParts.month ? currentParts.date : daysInMonth;
-    let count = 0;
-    for (let date = 1; date <= maxDay; date += 1) {
-      const day = dayNames[new Date(selectedYear, selectedMonth - 1, date).getDay()];
-      if (weeklyOffDays.includes(day.toLowerCase())) count += 1;
-    }
-    return count;
-  }, [currentParts.date, currentParts.month, currentParts.year, filters.month, filters.year, weeklyOffDays]);
+    return displayRecords.filter(isWeeklyOffDate).length;
+  }, [displayRecords, isWeeklyOffDate]);
   const todayDayName = dayNames[new Date(currentParts.year, currentParts.month - 1, currentParts.date).getDay()];
   const isWeeklyOffToday = weeklyOffDays.includes(todayDayName.toLowerCase());
 
@@ -183,7 +189,16 @@ export const AttendanceScreen = () => {
     const loadPolicies = async () => {
       try {
         const response = await getEmployeePayrollPolicies();
-        if (mounted) setWeeklyOffDays(weeklyOffDaysFromPolicies(response?.data || []));
+        if (mounted) {
+          const policies = response?.data || [];
+          setWeeklyOffDays(weeklyOffDaysFromPolicies(policies));
+          const cycleStart = currentCycleStartParts(policies, currentParts);
+          setFilters(current => ({
+            ...current,
+            month: String(cycleStart.month),
+            year: String(cycleStart.year),
+          }));
+        }
       } catch (err) {
         if (mounted) setWeeklyOffDays(['sunday']);
       }
@@ -192,7 +207,7 @@ export const AttendanceScreen = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentParts]);
 
   useEffect(() => {
     let mounted = true;
@@ -277,7 +292,7 @@ export const AttendanceScreen = () => {
     <Screen refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}>
       <Card>
         <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>This month</Text>
+          <Text style={styles.summaryLabel}>This salary cycle</Text>
           <Text style={styles.summaryValue}>{monthlyCount} present days</Text>
           <Text style={styles.summarySub}>
             Today: {isWeeklyOffToday ? 'Weekly off' : todayRecord?.attendanceOut ? 'Completed' : todayRecord?.attendanceIn ? 'Checked in' : 'Not checked in'}

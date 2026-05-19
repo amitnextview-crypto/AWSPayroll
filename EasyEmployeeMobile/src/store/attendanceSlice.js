@@ -18,7 +18,10 @@ export const loadAttendance = createAsyncThunk(
       if (!response?.success) {
         return rejectWithValue(response?.message || 'Attendance not found.');
       }
-      return response.data || [];
+      return {
+        records: response.data || [],
+        cycle: response.cycle || null,
+      };
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -59,6 +62,7 @@ const attendanceSlice = createSlice({
   name: 'attendance',
   initialState: {
     records: [],
+    cycle: null,
     loading: false,
     actionLoading: false,
     error: null,
@@ -78,7 +82,8 @@ const attendanceSlice = createSlice({
       })
       .addCase(loadAttendance.fulfilled, (state, action) => {
         state.loading = false;
-        state.records = action.payload;
+        state.records = action.payload.records;
+        state.cycle = action.payload.cycle;
       })
       .addCase(loadAttendance.rejected, (state, action) => {
         state.loading = false;

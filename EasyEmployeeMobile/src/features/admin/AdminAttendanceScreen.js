@@ -17,7 +17,7 @@ import {Screen} from '../../components/Screen';
 import {StatusPill} from '../../components/StatusPill';
 import {colors} from '../../theme/colors';
 import {spacing} from '../../theme/spacing';
-import {todayParts} from '../../utils/date';
+import {buildCycleDates, todayParts} from '../../utils/date';
 
 const idOf = item => String(item?.id || item?._id || item || '');
 const isWorkforce = user => ['employee', 'leader'].includes(String(user?.type || '').toLowerCase());
@@ -28,14 +28,6 @@ const apiDate = (year, month, date) =>
 
 const displayDate = (year, month, date) =>
   `${String(date).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-
-const daysForMonth = (year, month, today) => {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  if (year === today.year && month === today.month) return today.date;
-  const selected = new Date(year, month - 1, 1);
-  const current = new Date(today.year, today.month - 1, 1);
-  return selected > current ? 0 : daysInMonth;
-};
 
 const statusForMissing = (leaves, year, month, date) => {
   const target = apiDate(year, month, date);
@@ -63,6 +55,26 @@ const weeklyOffDaysFromPolicies = policies => {
     ['weekly off days', 'weekly off'].includes(String(item.label || '').trim().toLowerCase()),
   );
   return splitRuleList(rule?.value || 'Sunday');
+};
+const ruleNumberFromPolicies = (policies, labels, fallback) => {
+  const master = (policies || []).find(
+    item =>
+      String(item.title || '').toLowerCase() === 'master salary rule' ||
+      String(item.category || '').toLowerCase() === 'master salary rule',
+  );
+  const normalized = labels.map(item => item.toLowerCase());
+  const rule = (master?.rules || []).find(item => normalized.includes(String(item.label || '').trim().toLowerCase()));
+  const value = Number(String(rule?.value || '').match(/\d+/)?.[0]);
+  return Number.isFinite(value) ? value : fallback;
+};
+const currentCycleStartParts = (policies, today) => {
+  const startDay = ruleNumberFromPolicies(policies, ['Salary Cycle Start Day', 'Cycle Start Day'], 1);
+  const endDay = ruleNumberFromPolicies(policies, ['Salary Cycle End Day', 'Cycle End Day'], 31);
+  if (startDay > endDay && today.date <= endDay) {
+    const previous = new Date(today.year, today.month - 2, 1);
+    return {year: previous.getFullYear(), month: previous.getMonth() + 1};
+  }
+  return {year: today.year, month: today.month};
 };
 const statusOptions = [
   {label: 'Present', value: 'Present'},
@@ -101,6 +113,7 @@ export const AdminAttendanceScreen = ({route}) => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [records, setRecords] = useState([]);
+  const [cycle, setCycle] = useState(null);
   const [leaves, setLeaves] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
   const [todayLeaves, setTodayLeaves] = useState([]);
@@ -138,7 +151,11 @@ export const AdminAttendanceScreen = ({route}) => {
   const loadPolicies = async () => {
     try {
       const response = await getPayrollPolicies();
-      setWeeklyOffDays(weeklyOffDaysFromPolicies(response?.data || []));
+      const policies = response?.data || [];
+      setWeeklyOffDays(weeklyOffDaysFromPolicies(policies));
+      const cycleStart = currentCycleStartParts(policies, today);
+      setMonthFilter(String(cycleStart.month));
+      setYearFilter(String(cycleStart.year));
     } catch (err) {
       setWeeklyOffDays(['sunday']);
     }
@@ -167,6 +184,7 @@ export const AdminAttendanceScreen = ({route}) => {
         getAdminLeaves({applicantID: selectedEmployeeId}),
       ]);
       setRecords(attendanceResponse?.data || []);
+      setCycle(attendanceResponse?.cycle || null);
       setLeaves(leavesResponse?.data || []);
     } catch (err) {
       setError(err.message || 'Attendance could not be loaded.');
@@ -201,21 +219,22 @@ export const AdminAttendanceScreen = ({route}) => {
 
   const attendanceRows = useMemo(() => {
     if (!selectedEmployee) return [];
-    const recordByDate = new Map(records.map(item => [Number(item.date), item]));
-    const count = daysForMonth(year, month, today);
+    const recordByDate = new Map(records.map(item => [`${item.year}-${item.month}-${item.date}`, item]));
+    const cycleDates = buildCycleDates(cycle, year, month, today);
     const rows = [];
-    for (let date = 1; date <= count; date += 1) {
-      const record = recordByDate.get(date);
-      const day = dayNames[new Date(year, month - 1, date).getDay()];
+    cycleDates.forEach(parts => {
+      const {year: rowYear, month: rowMonth, date} = parts;
+      const record = recordByDate.get(`${rowYear}-${rowMonth}-${date}`);
+      const day = dayNames[new Date(rowYear, rowMonth - 1, date).getDay()];
       const isWeeklyOff = weeklyOffDays.includes(day.toLowerCase());
-      const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, year, month, date);
+      const missingStatus = isWeeklyOff ? 'Weekly Off' : statusForMissing(leaves, rowYear, rowMonth, date);
       const status = isWeeklyOff ? 'Weekly Off' : record?.status || (record ? (record.present ? 'Present' : 'Absent') : missingStatus);
       rows.push({
-        key: `${year}-${month}-${date}`,
+        key: `${rowYear}-${rowMonth}-${date}`,
         id: record?._id || record?.id || '',
         employeeID: selectedEmployeeId,
-        month,
-        year,
+        month: rowMonth,
+        year: rowYear,
         name: selectedEmployee.name || selectedEmployee.username || '-',
         email: selectedEmployee.email || '-',
         date,
@@ -226,13 +245,13 @@ export const AdminAttendanceScreen = ({route}) => {
         late: isWeeklyOff ? '-' : record?.late || '-',
         totalHours: isWeeklyOff ? '-' : record?.totalHours || '-',
         timeStatus: record?.timeStatus || (status === 'Present' ? 'Full Time' : status === 'Weekly Off' ? 'Weekly Off' : '-'),
-        reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, year, month, date)),
+        reason: record?.reason || (isWeeklyOff ? `${day} weekly off by master salary rule` : statusForMissing(leaves, rowYear, rowMonth, date)),
       });
-    }
+    });
     const selectedDate = Number(dateFilter || 0);
     const visibleRows = selectedDate ? rows.filter(row => row.date === selectedDate) : rows;
-    return visibleRows.sort((a, b) => b.date - a.date);
-  }, [dateFilter, leaves, month, records, selectedEmployee, today, weeklyOffDays, year]);
+    return visibleRows.sort((a, b) => new Date(b.year, b.month - 1, b.date) - new Date(a.year, a.month - 1, a.date));
+  }, [cycle, dateFilter, leaves, month, records, selectedEmployee, selectedEmployeeId, today, weeklyOffDays, year]);
 
   const todayAbsentRows = useMemo(() => {
     const todayIso = apiDate(today.year, today.month, today.date);
@@ -437,7 +456,7 @@ export const AdminAttendanceScreen = ({route}) => {
           <Text style={styles.title}>{selectedEmployee.name || selectedEmployee.username || '-'}</Text>
           <Text style={styles.meta}>Email: {selectedEmployee.email || '-'}</Text>
           <Text style={styles.meta}>Employee ID: {selectedEmployee.username || '-'}</Text>
-          <Text style={styles.meta}>Month records: {attendanceRows.length}</Text>
+          <Text style={styles.meta}>Salary cycle records: {attendanceRows.length}</Text>
         </Card>
       ) : null}
 
@@ -449,7 +468,7 @@ export const AdminAttendanceScreen = ({route}) => {
           </View>
           <Text style={styles.meta}>Name: {row.name}</Text>
           <Text style={styles.meta}>Email: {row.email}</Text>
-          <Text style={styles.meta}>Date: {displayDate(year, month, row.date)}</Text>
+          <Text style={styles.meta}>Date: {displayDate(row.year, row.month, row.date)}</Text>
           <Text style={styles.meta}>Day: {row.day}</Text>
           <Text style={styles.meta}>Status: {row.status}</Text>
           <Text style={styles.meta}>In Time: {row.attendanceIn}</Text>
